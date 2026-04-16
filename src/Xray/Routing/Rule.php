@@ -5,6 +5,8 @@ namespace XUI\Xray\Routing;
 use JSON\json;
 
 /**
+ * @method array|string|bool  inbound_tag(array|string $value = null) An array/string where each item represents an identifier.
+ * @method string|bool        outbound_tag(array|string $value = null) Corresponds to the identifier of an outbound.
  * @method string|bool        balancer_tag(string $value = null) Corresponds to the identifier of a balancer.
  * @method array|string|bool  user(array|string $value = null) An array where each item represents an email address.
  * @method string|bool        network(string $value = null) This can be "tcp", "udp", or "tcp,udp".
@@ -21,7 +23,7 @@ use JSON\json;
 class Rule
 {
     private array|string $inbound_tag;
-    private array|string $outbound_tag;
+    private string $outbound_tag;
     private string $balancer_tag;
     private array|string $user;
     private string $network;
@@ -49,7 +51,8 @@ class Rule
     public function rule(): array
     {
         $rule = [];
-        $rule['inboundTag'] = $this->inbound_tag;
+        $inbound_tag = $this->inbound_tag;
+        $rule['inboundTag'] = (is_string($inbound_tag)) ? [$inbound_tag] : $inbound_tag;
         $rule['outboundTag'] = $this->outbound_tag;
         if (isset($this->balancer_tag)) $rule['balancerTag'] = $this->balancer_tag;
         if (isset($this->user)) $rule['user'] = is_string($this->user) ? [$this->user] : $this->user;
