@@ -71,12 +71,12 @@ class Inbound
                 $request_data['settings'] = json::_out($config->settings->settings());
                 $request_data['streamSettings'] = json::_out($config->stream_settings->stream_settings());
                 $request_data['sniffing'] = json::_out($config->sniffing->sniffing());
-            break;
+                break;
             case 'socks':
             case 'http':
             case 'dokodemo-door':
                 $request_data['settings'] = json::_out($config->settings->settings());
-            break;
+                break;
         endswitch;
         try {
             $result = $this->guzzle->post("panel/inbound/add", [
@@ -263,12 +263,12 @@ class Inbound
                                     $request_data['settings'] = (is_null($config)) ? $inbound->settings : json::_out($config->settings->settings());
                                     $request_data['streamSettings'] = (is_null($config)) ? $inbound->streamSettings : json::_out($config->stream_settings->stream_settings());
                                     $request_data['sniffing'] = (is_null($config)) ? $inbound->sniffing : json::_out($config->sniffing->sniffing());
-                                break;
+                                    break;
                                 case 'socks':
                                 case 'http':
                                 case 'dokodemo-door':
                                     $request_data['settings'] = (is_null($config)) ? $inbound->settings : json::_out($config->settings->settings());
-                                break;
+                                    break;
                             endswitch;
                             $this->response_output = $last_response_output;
                             try {
@@ -334,6 +334,150 @@ class Inbound
             $error = $err->getMessage();
             $return = ['ok' => false, 'error_code' => $error_code, 'error' => $error];
         }
+        return $this->output($return);
+    }
+
+    /**
+     * Add a new client to an existing inbound
+     * @param int $inbound_id
+     * @param string $client_id
+     * @param string $email
+     * @param int|null $total_traffic
+     * @param int|string|null $expiry_time
+     * @param int|null $telegram_id
+     * @param int|null $subscription_id
+     * @return mixed
+     */
+    public function add_client(
+        int $inbound_id, string $client_id, string $email, int $total_traffic = 0, int|string $expiry_time = 0,
+        int $telegram_id = null, int $subscription_id = null
+    ): mixed
+    {
+        $st = microtime(true);
+        $settings = [
+            'clients' => [
+                [
+                    'id' => $client_id,
+                    'email' => $email,
+                    'totalGB' => $total_traffic,
+                    'expiryTime' => $expiry_time * 1000,
+                    'enable' => true,
+                    'tgId' => $telegram_id,
+                    'subId' => $subscription_id
+                ]
+            ]
+        ];
+        $request_data = ['settings' => json::_out($settings)];
+        try {
+            $result = $this->guzzle->post("panel/inbound/addClient", [
+                'query' => ['id' => $inbound_id],
+                'form_params' => $request_data
+            ]);
+            $body = $result->getBody();
+            $response = $this->response_output($body->getContents());
+            $et = microtime(true);
+            $tt = round($et - $st, 3);
+            $return = ['ok' => true, 'response' => $response, 'size' => $body->getSize(), 'time_taken' => $tt];
+        } catch (GuzzleException $err) {
+            $error_code = $err->getCode();
+            $error = $err->getMessage();
+            $return = ['ok' => false, 'error_code' => $error_code, 'error' => $error];
+        }
+        return $this->output($return);
+    }
+
+    /**
+     * Update a client of an inbound
+     * @param int $inbound_id
+     * @param string $client_id
+     * @param string $email
+     * @param int|null $total_traffic
+     * @param int|string|null $expiry_time
+     * @param bool $status
+     * @return string|array|object
+     */
+    public function update_client(int $inbound_id, string $client_id, string $email, int|null $total_traffic = 0, int|string|null $expiry_time = 0, bool $status = true): string|array|object
+    {
+        $st = microtime(true);
+        $settings = [
+            'clients' => [
+                [
+                    'id' => $client_id,
+                    'email' => $email,
+                    'totalGB' => $total_traffic,
+                    'expiryTime' => $expiry_time,
+                    'enable' => $status
+                ]
+            ]
+        ];
+
+        $request_data = ['settings' => json::_out($settings)];
+
+        try {
+            $result = $this->guzzle->post("panel/inbound/updateClient/$client_id", [
+                'query' => ['id' => $inbound_id],
+                'form_params' => $request_data
+            ]);
+            $body = $result->getBody();
+            $response = $this->response_output($body->getContents());
+            $et = microtime(true);
+            $tt = round($et - $st, 3);
+            $return = ['ok' => true, 'response' => $response, 'size' => $body->getSize(), 'time_taken' => $tt];
+        } catch (GuzzleException $err) {
+            $error_code = $err->getCode();
+            $error = $err->getMessage();
+            $return = ['ok' => false, 'error_code' => $error_code, 'error' => $error];
+        }
+        return $this->output($return);
+    }
+
+    /**
+     * Delete a client from an inbound
+     * @param int $inbound_id
+     * @param string $client_uuid
+     * @return object|array|string
+     */
+    public function delete_client(int $inbound_id, string $client_uuid): object|array|string
+    {
+        $st = microtime(true);
+
+        try {
+            $result = $this->guzzle->post("panel/inbound/$inbound_id/delClient/$client_uuid");
+            $body = $result->getBody();
+            $response = $this->response_output($body->getContents());
+            $et = microtime(true);
+            $tt = round($et - $st, 3);
+            $return = ['ok' => true, 'response' => $response, 'size' => $body->getSize(), 'time_taken' => $tt];
+        } catch (GuzzleException $err) {
+            $error_code = $err->getCode();
+            $error = $err->getMessage();
+            $return = ['ok' => false, 'error_code' => $error_code, 'error' => $error];
+        }
+
+        return $this->output($return);
+    }
+
+    /**
+     * Delete a client from an inbound
+     * @return object|array|string
+     */
+    public function online_clients(): object|array|string
+    {
+        $st = microtime(true);
+
+        try {
+            $result = $this->guzzle->post("panel/api/inbounds/onlines");
+            $body = $result->getBody();
+            $response = $this->response_output($body->getContents());
+            $et = microtime(true);
+            $tt = round($et - $st, 3);
+            $return = ['ok' => true, 'response' => $response, 'size' => $body->getSize(), 'time_taken' => $tt];
+        } catch (GuzzleException $err) {
+            $error_code = $err->getCode();
+            $error = $err->getMessage();
+            $return = ['ok' => false, 'error_code' => $error_code, 'error' => $error];
+        }
+
         return $this->output($return);
     }
 
@@ -508,37 +652,37 @@ class Inbound
                     $stream = $inbound->streamSettings;
                     $sniffing = $inbound->sniffing;
                     $config = new Vmess($inbound->listen, $inbound->port, $settings, $stream, $sniffing);
-                break;
+                    break;
                 case 'vless':
                     $settings = $inbound->settings;
                     $stream = $inbound->streamSettings;
                     $sniffing = $inbound->sniffing;
                     $config = new Vless($inbound->listen, $inbound->port, $settings, $stream, $sniffing);
-                break;
+                    break;
                 case 'trojan':
                     $settings = $inbound->settings;
                     $stream = $inbound->streamSettings;
                     $sniffing = $inbound->sniffing;
                     $config = new Trojan($inbound->listen, $inbound->port, $settings, $stream, $sniffing);
-                break;
+                    break;
                 case 'shadowsocks':
                     $settings = $inbound->settings;
                     $stream = $inbound->streamSettings;
                     $sniffing = $inbound->sniffing;
                     $config = new Shadowsocks($inbound->listen, $inbound->port, $settings, $stream, $sniffing);
-                break;
+                    break;
                 case 'dokodemo-door':
                     $settings = $inbound->settings;
                     $config = new DokodemoDoor($inbound->listen, $inbound->port, $settings);
-                break;
+                    break;
                 case 'socks':
                     $settings = $inbound->settings;
                     $config = new Socks($inbound->listen, $inbound->port, $settings);
-                break;
+                    break;
                 case 'http':
                     $settings = $inbound->settings;
                     $config = new Http($inbound->listen, $inbound->port, $settings);
-                break;
+                    break;
             endswitch;
             return $config ?? false;
         } else {
@@ -565,14 +709,14 @@ class Inbound
                 $config = new ob_Vmess();
                 $config_settings = new \XUI\Xray\Outbound\Protocols\Vmess\Settings($address, $port);
                 $config_settings->add_user($settings->clients[0]['id']);
-            break;
+                break;
             case 'vless':
                 $settings = $inbound_config->settings;
                 $stream = $inbound_config->stream_settings;
                 $config = new ob_Vless();
                 $config_settings = new \XUI\Xray\Outbound\Protocols\Vless\Settings($address, $port);
                 $config_settings->add_user($settings->clients[0]['id']);
-            break;
+                break;
             case 'trojan':
                 $settings = $inbound_config->settings;
                 $stream = $inbound_config->stream_settings;
@@ -580,7 +724,7 @@ class Inbound
                 $config_settings = new \XUI\Xray\Outbound\Protocols\Trojan\Settings(
                     $address, $port, $settings->clients[0]['password'], $settings->clients[0]['email']
                 );
-            break;
+                break;
             case 'shadowsocks':
                 $settings = $inbound_config->settings;
                 $stream = $inbound_config->stream_settings;
@@ -588,19 +732,19 @@ class Inbound
                 $config_settings = new \XUI\Xray\Outbound\Protocols\Shadowsocks\Settings(
                     $address, $port, $settings->password, $settings->method, $settings->email
                 );
-            break;
+                break;
             case 'socks':
                 $settings = $inbound_config->settings;
                 $config = new ob_Socks();
                 $config_settings = new \XUI\Xray\Outbound\Protocols\Socks\Settings($address, $port);
                 $config_settings->add_user($settings->accounts[0]['username'], $settings->accounts[0]['password']);
-            break;
+                break;
             case 'http':
                 $settings = $inbound_config->settings;
                 $config = new ob_Http();
                 $config_settings = new \XUI\Xray\Outbound\Protocols\Http\Settings($address, $port);
                 $config_settings->add_user($settings->accounts[0]['username'], $settings->accounts[0]['password']);
-            break;
+                break;
         endswitch;
         if (isset($config_settings))
             $config->settings = $config_settings;
@@ -619,16 +763,16 @@ class Inbound
                                 'path' => $stream->tcp_settings['header']['request']['path'],
                                 'headers' => $request_headers
                             ];
-                        break;
+                            break;
                         case 'none':
                             $header_request = [];
-                        break;
+                            break;
                     endswitch;
                     $config_stream->tcp_settings($header_type, $header_request);
-                break;
+                    break;
                 case 'ws':
                     $config_stream->ws_settings($stream->ws_settings['acceptProxyProtocol'], $stream->ws_settings['path']);
-                break;
+                    break;
                 case 'kcp':
                     $config_stream->kcp_settings(
                         $stream->kcp_settings['header']['type'],
@@ -641,7 +785,7 @@ class Inbound
                         $stream->kcp_settings['readBufferSize'],
                         $stream->kcp_settings['writeBufferSize'],
                     );
-                break;
+                    break;
                 case 'http':
                     $config_stream->http_settings(
                         $stream->http_settings['method'],
@@ -650,13 +794,13 @@ class Inbound
                         $stream->http_settings['read_idle_timeout'],
                         $stream->http_settings['health_check_timeout']
                     );
-                break;
+                    break;
                 case 'domainsocket':
                     $config_stream->ds_settings($stream->ds_settings['path'], $stream->ds_settings['abstract'], $stream->ds_settings['padding']);
-                break;
+                    break;
                 case 'quic':
                     $config_stream->quic_settings($stream->quic_settings['security'], $stream->quic_settings['key'], $stream->quic_settings['header']['type']);
-                break;
+                    break;
                 case 'grpc':
                     $config_stream->grpc_settings(
                         $stream->grpc_settings['serviceName'],
@@ -666,12 +810,12 @@ class Inbound
                         $stream->grpc_settings['permit_without_stream'],
                         $stream->grpc_settings['initial_windows_size']
                     );
-                break;
+                    break;
             endswitch;
             switch ($stream->security):
                 case 'none':
                     $config_stream->security = 'none';
-                break;
+                    break;
                 case 'tls':
                     $config_stream->tls_settings(
                         $stream->tls_settings['serverName'],
@@ -679,7 +823,7 @@ class Inbound
                         $stream->tls_settings['alpn'],
                         $stream->tls_settings['fingerprint'],
                     );
-                break;
+                    break;
                 case 'reality':
                     $config_stream->reality_settings(
                         $stream->reality_settings['show'],
@@ -689,7 +833,7 @@ class Inbound
                         $stream->reality_settings['shortIds'][0],
                         $stream->reality_settings['settings']['spiderX']
                     );
-                break;
+                    break;
             endswitch;
             $config->stream_settings = $config_stream;
         endif;
