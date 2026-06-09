@@ -2,39 +2,33 @@
 
 namespace XUI\Xray\Reverse;
 
-use GuzzleHttp\Client;
-use JSON\json;
-use XUI\Xray\Xray;
-use XUI\Xui;
+use XUI\Handler\Request;
+use XUI\Handler\Result;
+use XUI\Helper\Statics;
+use XUI\Xray;
+/**
+ * @method array|bool|null   bridges(array|null $value = null)          Get/Set the bridges.<br/>Don't set $value to get list of bridges.
+ * @method array|bool|null   portals(array|null $value = null)          Get/Set the portals.<br/>Don't set $value to get list of portals.
+ */
 
 class Reverse
 {
-    private Client $guzzle;
-    private Xray $xray;
-    public int $output;
-    public int $response_output;
-    public array $bridges = [];
-    public array $portals = [];
+    private array $bridges = [];
+    private array $portals = [];
 
-    public function __construct(Client $guzzle, int $output = Xui::OUTPUT_OBJECT, int $response_output = Xui::OUTPUT_OBJECT)
+    public function __construct(private readonly Xray $xray)
     {
-        $this->guzzle = $guzzle;
-        $this->output = $output;
-        $this->response_output = $response_output;
     }
 
     /**
      * Load reverse configurations from xray config
-     * <h4>Must be called before using reverse!</h4>
-     * @return void
+     * @return bool
      */
 
     public function load(): bool
     {
-        $this->xray = new Xray($this->guzzle, Xui::OUTPUT_ARRAY, Xui::OUTPUT_ARRAY);
-        $result = $this->xray->get_configs()['response'];
-        if (isset($result['reverse'])) {
-            $reverse = $result['reverse'];
+        $reverse = $this->xray->get('reverse', output: Statics::OUTPUT_ARRAY);
+        if (is_array($reverse)) {
             if (isset($reverse['bridges'])) $this->bridges = $reverse['bridges'];
             if (isset($reverse['portals'])) $this->portals = $reverse['portals'];
             return true;
@@ -45,36 +39,27 @@ class Reverse
 
     /**
      *  Update reverse configuration based on current configs.
-     * @return object|string|array
+     * @return Result
      */
-    public function update(): object|string|array
+    public function update(): Result
     {
-        $st = microtime(true);
         $reverse = [];
         if (!empty($this->portals)) $reverse['portals'] = $this->portals;
         if (!empty($this->bridges)) $reverse['bridges'] = $this->bridges;
-        $result = $this->xray->update_config([
-            'reverse' => $reverse
-        ]);
-        if ($result['ok']) {
-            $response = $result['response'];
-            $et = microtime(true);
-            $tt = round($et - $st, 3);
-            $return = ['ok' => true, 'response' => $this->response_output($response), 'size' => $result['size'], 'time_taken' => $tt];
-        } else {
-            $return = $result;
-        }
-        return $this->output($return);
+        return $this->xray->update(['reverse' => $reverse]);
     }
-
+    public function __call($name, $args)
+    {
+        return empty($args) ? ($this->$name ?? null) : !!($this->$name = $args[0]);
+    }
     /**
      * Add bridge to reverse
      * @param string $tag
      * @param string $domain
      * @param bool $apply Apply changes to reverse in xray config
-     * @return true|object|array|string
+     * @return true|Result
      */
-    public function add_bridge(string $tag, string $domain = 'reverse.xui', bool $apply = true): true|object|array|string
+    public function add_bridge(string $tag, string $domain = 'reverse.xui', bool $apply = true): true|Result
     {
         $this->bridges[] = [
             'tag' => $tag,
@@ -89,21 +74,18 @@ class Reverse
     /**
      * Get a bridge from reverse
      * @param string $bridge_tag
-     * @return object|array|string
+     * @return Result
      */
-    public function get_bridge(string $bridge_tag): object|array|string
+    public function get_bridge(string $bridge_tag): Result
     {
-        $st = microtime(true);
-        $return = ['ok' => false, 'error_code' => 404, 'error' => 'reverse bridge not found'];
+        $return = Result::make_fail(404, 'reverse bridge not found');
         foreach ($this->bridges as $bridge):
             if ($bridge_tag == $bridge['tag']):
-                $et = microtime(true);
-                $tt = round($et - $st, 3);
-                $return = ['ok' => true, 'response' => $this->response_output($bridge), 'size' => null, 'time_taken' => $tt];
+                $return = Result::make_ok(Result::make_response(true, $bridge));
                 break;
             endif;
         endforeach;
-        return $this->output($return);
+        return $return;
     }
 
     /**
@@ -112,11 +94,11 @@ class Reverse
      * @param string|null $tag
      * @param string|null $domain
      * @param bool $apply Apply changes to reverse in xray config
-     * @return true|object|array|string
+     * @return true|Result
      */
-    public function update_bridge(string $bridge_tag, string $tag = null, string $domain = null, bool $apply = true): true|object|array|string
+    public function update_bridge(string $bridge_tag, string $tag = null, string $domain = null, bool $apply = true): true|Result
     {
-        $return = $this->output(['ok' => false, 'error_code' => 404, 'error' => 'reverse bridge not found']);
+        $return = Result::make_fail(404, 'reverse bridge not found');
         foreach ($this->bridges as $key => $bridge):
             if ($bridge_tag == $bridge['tag']):
                 if (!is_null($tag)) $bridge['tag'] = $tag;
@@ -136,9 +118,9 @@ class Reverse
      * Delete a bridge from reverse
      * @param string $bridge_tag
      * @param bool $apply Apply changes to reverse in xray config
-     * @return true|object|array|string
+     * @return true|Result
      */
-    public function delete_bridge(string $bridge_tag, bool $apply = true): true|object|array|string
+    public function delete_bridge(string $bridge_tag, bool $apply = true): true|Result
     {
         $deleted = false;
         foreach ($this->bridges as $key => $bridge):
@@ -154,7 +136,7 @@ class Reverse
             else
                 $return = true;
         } else {
-            $return = $this->output(['ok' => false, 'error_code' => 404, 'error' => 'routing not found']);
+            $return = Result::make_fail(404, 'reverse bridge not found');
         }
         return $return;
     }
@@ -181,9 +163,9 @@ class Reverse
      * @param string $tag
      * @param string $domain
      * @param bool $apply Apply changes to reverse in xray config
-     * @return true|object|array|string
+     * @return true|Result
      */
-    public function add_portal(string $tag, string $domain = 'reverse.xui', bool $apply = true): true|object|array|string
+    public function add_portal(string $tag, string $domain = 'reverse.xui', bool $apply = true): true|Result
     {
         $this->portals[] = [
             'tag' => $tag,
@@ -198,21 +180,18 @@ class Reverse
     /**
      * Get a portal from reverse
      * @param string $portal_tag
-     * @return object|array|string
+     * @return Result
      */
-    public function get_portal(string $portal_tag): object|array|string
+    public function get_portal(string $portal_tag): Result
     {
-        $st = microtime(true);
-        $return = ['ok' => false, 'error_code' => 404, 'error' => 'reverse portal not found'];
+        $return = Result::make_fail(404, 'reverse portal not found');
         foreach ($this->portals as $portal):
             if ($portal_tag == $portal['tag']):
-                $et = microtime(true);
-                $tt = round($et - $st, 3);
-                $return = ['ok' => true, 'response' => $this->response_output($portal), 'size' => null, 'time_taken' => $tt];
+                $return = Result::make_ok(Result::make_response(true, $portal));
                 break;
             endif;
         endforeach;
-        return $this->output($return);
+        return $return;
     }
 
     /**
@@ -221,11 +200,11 @@ class Reverse
      * @param string|null $tag
      * @param string|null $domain
      * @param bool $apply Apply changes to reverse in xray config
-     * @return true|object|array|string
+     * @return true|Result
      */
-    public function update_portal(string $portal_tag, string $tag = null, string $domain = null, bool $apply = true): true|object|array|string
+    public function update_portal(string $portal_tag, string $tag = null, string $domain = null, bool $apply = true): true|Result
     {
-        $return = $this->output(['ok' => false, 'error_code' => 404, 'error' => 'reverse portal not found']);
+        $return = Result::make_fail(404, 'reverse portal not found');
         foreach ($this->portals as $key => $portal):
             if ($portal_tag == $portal['tag']):
                 if (!is_null($tag)) $portal['tag'] = $tag;
@@ -245,9 +224,9 @@ class Reverse
      * Delete a portal from reverse
      * @param string $portal_tag
      * @param bool $apply Apply changes to reverse in xray config
-     * @return true|object|array|string
+     * @return true|Result
      */
-    public function delete_portal(string $portal_tag, bool $apply = true): true|object|array|string
+    public function delete_portal(string $portal_tag, bool $apply = true): true|Result
     {
         $deleted = false;
         foreach ($this->portals as $key => $portal):
@@ -263,7 +242,7 @@ class Reverse
             else
                 $return = true;
         } else {
-            $return = $this->output(['ok' => false, 'error_code' => 404, 'error' => 'routing not found']);
+            $return = Result::make_fail(404, 'reverse portal not found');
         }
         return $return;
     }
@@ -283,23 +262,5 @@ class Reverse
             endif;
         endforeach;
         return $return;
-    }
-
-    private function output(array|object|string $data): object|array|string
-    {
-        return match ($this->output) {
-            Xui::OUTPUT_JSON => json::to_json($data),
-            Xui::OUTPUT_OBJECT => json::to_object($data),
-            Xui::OUTPUT_ARRAY => json::to_array($data)
-        };
-    }
-
-    private function response_output(array|object|string $data): object|array|string
-    {
-        return match ($this->response_output) {
-            Xui::OUTPUT_JSON => json::to_json($data),
-            Xui::OUTPUT_OBJECT => json::to_object($data),
-            Xui::OUTPUT_ARRAY => json::to_array($data)
-        };
     }
 }

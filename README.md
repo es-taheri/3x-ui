@@ -156,7 +156,7 @@ $config = new Vmess($listen, $port);
 $config->settings->add_client($enable, $uuid, $email, $total_traffic, $expiry_time, $limit_ip, $tgid, $subid, $reset);
 $config->stream_settings->ws_settings($accept_proxy_protocol,$path,$headers);
 #---------------------------------------------------------------------------------
-// Create Outbound config
+// Create Outbounds config
 use XUI\Xray\Outbound\Protocols\Vmess\Vmess;
 $config = new Vmess();
 $config->settings->address = 'example.3xui.net';
@@ -263,8 +263,8 @@ $response_output = \XUI\Xui::OUTPUT_OBJECT; // Type of response value of request
   ```php
   $xui->login($username,$password);
   #---------------------------------------------------------------------------------
-  $username = 'admin'; // Panel login username
-  $password = 'xxxx'; // Panel login password
+  $username = 'admin'; // Settings login username
+  $password = 'xxxx'; // Settings login password
   ```
 
 - #### Random
@@ -544,7 +544,7 @@ A property to accessing panel settings,restart panel,default xray config.
     $panel->update_setting($update);
     #---------------------------------------------------------------------------------
     $setting = 'webPort'; // Specified setting you want to get
-    $update = ['webPort'=>1234]; // Changes you want to made to Panel settings 
+    $update = ['webPort'=>1234]; // Changes you want to made to Settings settings 
     ```
 - #### Restart
   Restart 3x-ui panel (Only panel!)

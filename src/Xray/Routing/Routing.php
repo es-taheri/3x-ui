@@ -2,11 +2,9 @@
 
 namespace XUI\Xray\Routing;
 
-use GuzzleHttp\Client;
-use JSON\json;
-use XUI\Panel\Panel;
-use XUI\Xray\Xray;
-use XUI\Xui;
+use XUI\Handler\Result;
+use XUI\Helper\Statics;
+use XUI\Xray;
 
 /**
  * @method string|bool|null  domain_strategy(string|null $value = null)   Get/Set the domain strategy.<br/>Don't set $value to get value of domain strategy.
@@ -16,33 +14,23 @@ use XUI\Xui;
  */
 class Routing
 {
-    private Client $guzzle;
-    private Xray $xray;
-    public int $output;
-    public int $response_output;
     private string $domain_strategy;
     private string $domain_matcher;
     private array $rules;
     private array $balancers;
 
-    public function __construct(Client $guzzle, int $output = Xui::OUTPUT_OBJECT, int $response_output = Xui::OUTPUT_OBJECT)
+    public function __construct(private readonly Xray $xray)
     {
-        $this->guzzle = $guzzle;
-        $this->output = $output;
-        $this->response_output = $response_output;
     }
 
     /**
      * Load routing configurations from xray config
-     * <h4>Must be called before using routing!</h4>
-     * @return void
+     * @return bool
      */
     public function load(): bool
     {
-        $this->xray = new Xray($this->guzzle, Xui::OUTPUT_ARRAY, Xui::OUTPUT_ARRAY);
-        $result = $this->xray->get_config('routing');
-        if ($result['ok'] && !empty($result['response'])) {
-            $routing = $result['response'];
+        $routing = $this->xray->get('routing', output: Statics::OUTPUT_ARRAY);
+        if (is_array($routing)) {
             if (isset($routing['domainStrategy'])) $this->domain_strategy = $routing['domainStrategy'];
             if (isset($routing['domainMatcher'])) $this->domain_matcher = $routing['domainMatcher'];
             if (isset($routing['rules'])) $this->rules = $routing['rules'];
@@ -55,29 +43,17 @@ class Routing
 
     /**
      *  Update routing configuration based on current configs.
-     * @return object|string|array
+     * @return Result
      */
-    public function update(): object|string|array
+    public function update(): Result
     {
-        $st = microtime(true);
         $routing = [
             'domainStrategy' => $this->domain_strategy,
-            'rules' => $this->rules
+            'rules' => $this->rules,
         ];
         if (isset($this->domain_matcher)) $routing['domainMatcher'] = $this->domain_matcher;
         if (isset($this->balancers)) $routing['balancers'] = $this->balancers;
-        $result = $this->xray->update_config([
-            'routing' => $routing
-        ]);
-        if ($result['ok']) {
-            $response = $result['response'];
-            $et = microtime(true);
-            $tt = round($et - $st, 3);
-            $return = ['ok' => true, 'response' => $this->response_output($response), 'size' => $result['size'], 'time_taken' => $tt];
-        } else {
-            $return = $result;
-        }
-        return $this->output($return);
+        return $this->xray->update(['routing' => $routing]);
     }
 
     public function __call($name, $args)
@@ -89,9 +65,9 @@ class Routing
      * Add rule to routing
      * @param Rule $rule
      * @param bool $apply Apply changes to routing in xray config
-     * @return true|object|array|string
+     * @return true|Result
      */
-    public function add_rule(Rule $rule, bool $apply = true): true|object|array|string
+    public function add_rule(Rule $rule, bool $apply = true): true|Result
     {
         $this->rules[] = $rule->rule();
         if ($apply) {
@@ -105,26 +81,23 @@ class Routing
      * Get a rule from routing
      * @param string|array $rule_inbound_tag
      * @param string $rule_outbound_tag
-     * @return object|array|string
+     * @return Result
      */
-    public function get_rule(string|array $rule_inbound_tag, string $rule_outbound_tag): object|array|string
+    public function get_rule(string|array $rule_inbound_tag, string $rule_outbound_tag): Result
     {
-        $st = microtime(true);
         $rule_inbound_tag = (is_string($rule_inbound_tag)) ? [$rule_inbound_tag] : $rule_inbound_tag;
-        $return = ['ok' => false, 'error_code' => 404, 'error' => 'routing rule not found'];
+        $return = Result::make_fail(404, 'routing rule not found');
         foreach ($this->rules as $rule):
             $is_same = true;
             foreach ($rule_inbound_tag as $a_inbound_tag):
                 if (isset($rule['inboundTag']) && !in_array($a_inbound_tag, $rule['inboundTag'])) $is_same = false;
             endforeach;
             if ($rule_outbound_tag == $rule['outboundTag'] && $is_same):
-                $et = microtime(true);
-                $tt = round($et - $st, 3);
-                $return = ['ok' => true, 'response' => $this->response_output($rule), 'size' => null, 'time_taken' => $tt];
+                $return = Result::make_ok(Result::make_response(true, $rule));
                 break;
             endif;
         endforeach;
-        return $this->output($return);
+        return $return;
     }
 
     /**
@@ -133,12 +106,12 @@ class Routing
      * @param string $rule_outbound_tag
      * @param Rule $rule
      * @param bool $apply Apply changes to routing in xray config
-     * @return true|object|array|string
+     * @return true|Result
      */
-    public function update_rule(string|array $rule_inbound_tag, string $rule_outbound_tag, Rule $rule, bool $apply = true): true|object|array|string
+    public function update_rule(string|array $rule_inbound_tag, string $rule_outbound_tag, Rule $rule, bool $apply = true): true|Result
     {
         $rule_inbound_tag = (is_string($rule_inbound_tag)) ? [$rule_inbound_tag] : $rule_inbound_tag;
-        $return = $this->output(['ok' => false, 'error_code' => 404, 'error' => 'routing rule not found']);
+        $return = Result::make_fail(404, 'routing rule not found');
         foreach ($this->rules as $key => $a_rule):
             $is_same = true;
             foreach ($rule_inbound_tag as $a_inbound_tag):
@@ -146,11 +119,10 @@ class Routing
             endforeach;
             if ($rule_outbound_tag == $a_rule['outboundTag'] && $is_same):
                 $this->rules[$key] = $rule->rule();
-                if ($apply) {
+                if ($apply)
                     $return = $this->update();
-                } else {
+                else
                     $return = true;
-                }
                 break;
             endif;
         endforeach;
@@ -162,9 +134,9 @@ class Routing
      * @param string|array $rule_inbound_tag
      * @param string $rule_outbound_tag
      * @param bool $apply Apply changes to routing in xray config
-     * @return true|object|array|string
+     * @return true|Result
      */
-    public function delete_rule(string|array $rule_inbound_tag, string $rule_outbound_tag, bool $apply = true): true|object|array|string
+    public function delete_rule(string|array $rule_inbound_tag, string $rule_outbound_tag, bool $apply = true): true|Result
     {
         $rule_inbound_tag = (is_string($rule_inbound_tag)) ? [$rule_inbound_tag] : $rule_inbound_tag;
         $deleted = false;
@@ -185,7 +157,7 @@ class Routing
             else
                 $return = true;
         } else {
-            $return = $this->output(['ok' => false, 'error_code' => 404, 'error' => 'routing not found']);
+            $return = Result::make_fail(404, 'routing rule not found');
         }
         return $return;
     }
@@ -224,22 +196,101 @@ class Routing
         return new Rule($inbound_tag, $outbound_tag);
     }
 
-
-    private function output(array|object|string $data): object|array|string
+    /**
+     * Add balancer to routing
+     * @param Balancer $balancer
+     * @param bool $apply Apply changes to routing in xray config
+     * @return true|Result
+     */
+    public function add_balancer(Balancer $balancer, bool $apply = true): true|Result
     {
-        return match ($this->output) {
-            Xui::OUTPUT_JSON => json::to_json($data),
-            Xui::OUTPUT_OBJECT => json::to_object($data),
-            Xui::OUTPUT_ARRAY => json::to_array($data)
-        };
+        $this->balancers[] = $balancer->balancer();
+        if ($apply) {
+            return $this->update();
+        } else {
+            return true;
+        }
     }
 
-    private function response_output(array|object|string $data): object|array|string
+    /**
+     * Get a balancer from routing
+     * @param string $balancer_tag
+     * @return Result
+     */
+    public function get_balancer(string $balancer_tag): Result
     {
-        return match ($this->response_output) {
-            Xui::OUTPUT_JSON => json::to_json($data),
-            Xui::OUTPUT_OBJECT => json::to_object($data),
-            Xui::OUTPUT_ARRAY => json::to_array($data)
-        };
+        foreach ($this->balancers as $balancer):
+            if ($balancer_tag == $balancer['tag'])
+                return Result::make_ok(Result::make_response(true, $balancer));
+        endforeach;
+        return Result::make_fail(404, 'routing balancer not found');
     }
+
+    /**
+     * Update a balancer of routing
+     * @param string $balancer_tag
+     * @param Balancer $balancer
+     * @param bool $apply Apply changes to routing in xray config
+     * @return true|Result
+     */
+    public function update_balancer(string $balancer_tag, Balancer $balancer, bool $apply = true): true|Result
+    {
+        foreach ($this->balancers as $key => $a_balancer):
+            if ($balancer_tag == $a_balancer['tag']):
+                $this->balancers[$key] = $balancer->balancer();
+                if ($apply)
+                    return $this->update();
+                else
+                    return true;
+            endif;
+        endforeach;
+        return Result::make_fail(404, 'routing rule not found');
+    }
+
+    /**
+     * Delete a balancer from routing
+     * @param string $balancer_tag
+     * @param bool $apply Apply changes to routing in xray config
+     * @return true|Result
+     */
+    public function delete_balancer(string $balancer_tag, bool $apply = true): true|Result
+    {
+        foreach ($this->balancers as $key => $a_balancer):
+            if ($balancer_tag == $a_balancer['tag']):
+                unset($this->balancers[$key]);
+                if ($apply)
+                    return $this->update();
+                else
+                    return true;
+            endif;
+        endforeach;
+        return Result::make_fail(404, 'routing rule not found');
+    }
+
+    /**
+     * Check a balancer availability on routing
+     * @param string $balancer_tag
+     * @return bool
+     */
+    public function has_balancer(string $balancer_tag): bool
+    {
+        foreach ($this->balancers as $a_balancer):
+            if ($balancer_tag == $a_balancer['tag']):
+                return true;
+            endif;
+        endforeach;
+        return false;
+    }
+
+    /**
+     * Configure a balancer
+     * @param string $balancer_tag
+     * @param array|string|object $balancer
+     * @return Balancer
+     */
+    public static function balancer(string $balancer_tag): Balancer
+    {
+        return new Balancer($balancer_tag);
+    }
+
 }
