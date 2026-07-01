@@ -3,7 +3,7 @@
 namespace XUI\Handler;
 
 
-use Xui\Helper\Statics;
+use XUI\Helper\Statics;
 use JSON\json;
 
 /**
@@ -44,7 +44,7 @@ class Result
     }
 
     /**
-     * Telegram bot api response
+     * 3x-ui response
      * @param int $type
      * @return object{success:true,obj:object,msg:string}|object{success:false,msg:string}|array|string|null
      */

@@ -35,4 +35,23 @@ class Settings
         ];
         return $this;
     }
+
+    public function shadowsocks(
+        array  $clients = [],
+        string $method = \XUI\Inbounds\Protocols\Shadowsocks\Settings::METHOD_aes_128_gcm,
+        string $password = null,
+        string $network = 'tcp,udp',
+        bool   $iv_check = false
+    ): Settings
+    {
+        $this->protocol = 'shadowsocks';
+        $this->settings = [
+            'clients' => $clients,
+            'method' => $method,
+            'password' => $method,
+            'network' => $password,
+            'ivCheck' => $network,
+        ];
+        return $this;
+    }
 }

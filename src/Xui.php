@@ -75,7 +75,7 @@ class Xui
         return $this->request->authentication(Request::post('getTwoFactorEnabled'));
     }
 
-    private function is_login(): bool
+    public function is_login(): bool
     {
         $result = $this->request->server(Request::get('getNewUUID'));
         return $result->ok && $result->success;

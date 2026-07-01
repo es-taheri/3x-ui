@@ -32,11 +32,27 @@ class Server
             Request::get("xrayMetricsHistory/$metric/$bucket") :
             Request::get('xrayMetricsState'));
     }
+
     public function xray_observatory(string $tag = null, int $bucket = null): Result
     {
         return $this->_request(isset($tag, $bucket) ?
             Request::get("xrayObservatoryHistory/$tag/$bucket") :
             Request::get('xrayObservatory'));
+    }
+
+    public function restart_xray(): Result
+    {
+        return $this->_request(Request::post('restartXrayService'));
+    }
+
+    public function get_db(): Result
+    {
+        return $this->_request(Request::get('getDb'));
+    }
+
+    public function import_db(string $db_full_path): Result
+    {
+        return $this->_request(Request::post('importDb', multipart: [['name' => 'db', 'contents' => fopen($db_full_path, 'r')]]));
     }
 
     private function _request(array $request): Result

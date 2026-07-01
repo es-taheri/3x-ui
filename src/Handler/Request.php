@@ -199,11 +199,11 @@ class Request
     public function settings(array $request = [], array $requests = []): Result|array
     {
         if (!empty($request)) {
-            $request['route'] = 'panel/setting/' . $request['route'];
+            $request['route'] = 'panel/api/setting/' . $request['route'];
             return $this->request($request);
         } else {
             foreach ($requests as $key => $request):
-                $requests[$key]['route'] = 'panel/setting/' . $request['route'];
+                $requests[$key]['route'] = 'panel/api/setting/' . $request['route'];
             endforeach;
             return $this->multi_request($requests);
         }
@@ -217,11 +217,11 @@ class Request
     public function api_tokens(array $request = [], array $requests = []): Result|array
     {
         if (!empty($request)) {
-            $request['route'] = 'panel/setting/apiTokens/' . $request['route'];
+            $request['route'] = 'panel/api/setting/apiTokens/' . $request['route'];
             return $this->request($request);
         } else {
             foreach ($requests as $key => $request):
-                $requests[$key]['route'] = 'panel/setting/apiTokens/' . $request['route'];
+                $requests[$key]['route'] = 'panel/api/setting/apiTokens/' . $request['route'];
             endforeach;
             return $this->multi_request($requests);
         }
@@ -235,11 +235,11 @@ class Request
     public function xray(array $request = [], array $requests = []): Result|array
     {
         if (!empty($request)) {
-            $request['route'] = 'panel/xray/' . $request['route'];
+            $request['route'] = 'panel/api/xray/' . $request['route'];
             return $this->request($request);
         } else {
             foreach ($requests as $key => $request):
-                $requests[$key]['route'] = 'panel/xray/' . $request['route'];
+                $requests[$key]['route'] = 'panel/api/xray/' . $request['route'];
             endforeach;
             return $this->multi_request($requests);
         }
@@ -314,7 +314,7 @@ class Request
      * @param array $form_params
      * @return array{route:string,method:string,body:array,query:array,form_params:array}
      */
-    private static function make(string $route, string $method, array $body = [], array $query = [], array $form_params = []): array
+    private static function make(string $route, string $method, array $body = [], array $query = [], array $form_params = [], array $multipart = []): array
     {
         return [
             'route' => $route,
@@ -322,24 +322,24 @@ class Request
             'body' => $body,
             'query' => $query,
             'form_params' => $form_params,
+            'multipart' => $multipart,
         ];
     }
 
-    public static function post(string $route, array $body = [], array $form_params = [], array $query = []): array
+    public static function post(string $route, array $body = [], array $form_params = [], array $query = [], array $multipart = []): array
     {
-        return self::make($route, self::METHOD_POST, $body, $query, $form_params);
+        return self::make($route, self::METHOD_POST, $body, $query, $form_params, $multipart);
     }
 
-    public static function get(string $route, array $query = [], array $body = [], array $form_params = []): array
+    public static function get(string $route, array $query = [], array $body = [], array $form_params = [], array $multipart = []): array
     {
-        return self::make($route, self::METHOD_GET, $body, $query, $form_params);
+        return self::make($route, self::METHOD_GET, $body, $query, $form_params, $multipart);
     }
 
     private function onFulfilled(ResponseInterface $result, $st): Result
     {
         $body = $result->getBody();
         $response = $body->getContents();
-//        file_put_contents('F:\wamp64\www\root\Library\3x-ui\v2\schema.json', $response);
         $et = microtime(true);
         $tt = round($et - $st, 3);
         return new Result([

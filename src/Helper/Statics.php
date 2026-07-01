@@ -25,6 +25,7 @@ class Statics
             default => json::to_array($data),
         };
     }
+
     /**
      * Generate any random string
      * @param int $length
@@ -70,5 +71,4 @@ class Statics
             mt_rand(0, 0xffff)
         );
     }
-
 }

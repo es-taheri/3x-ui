@@ -61,6 +61,8 @@ class Inbounds
         int            $port = null,
         int            $expiry_time = 0,
         int            $total = 0,
+        int            $up = 0,
+        int            $down = 0,
         bool           $enable = true): Result
     {
         if (is_null($port)) $port = rand(1, 65535);
@@ -72,6 +74,8 @@ class Inbounds
             'protocol' => $protocol = $settings->protocol,
             'expiryTime' => $expiry_time,
             'total' => $total,
+            'up' => $up,
+            'down' => $down,
         ];
         switch ($protocol):
             case 'vmess':
@@ -222,6 +226,7 @@ class Inbounds
                 Request::get("$id_or_ids/fallbacks"));
         }
     }
+
     /**
      * Read inbound config exported or got from server.
      * @param array|string|object $inbound
