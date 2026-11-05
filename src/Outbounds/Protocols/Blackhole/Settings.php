@@ -2,29 +2,31 @@
 
 namespace XUI\Outbounds\Protocols\Blackhole;
 
-use JSON\json;
-use stdClass;
-
+/**
+ * `settings` object of a blackhole outbound.
+ *
+ * @link https://xtls.github.io/en/config/outbounds/blackhole.html
+ */
 class Settings
-
 {
+    /** Response type: `none` or `http`. */
     public string $response_type;
 
-    public function __construct(string $response_type='none')
+    /**
+     * @param string $response_type Response type.
+     */
+    public function __construct(string $response_type = 'none')
     {
         $this->response_type = $response_type;
     }
 
     /**
-     * Returns fully structured settings for xray json config
+     * Render the complete `settings` array.
+     *
      * @return array
      */
     public function settings(): array
     {
-        return [
-            'response' => [
-                'type' => $this->response_type
-            ]
-        ];
+        return ['response' => ['type' => $this->response_type]];
     }
 }

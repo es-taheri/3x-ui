@@ -1,578 +1,1095 @@
-<p align="right" style="font-size: 0.8em;"><em>💡 Tip: Use the filter headings menu (top-right) to jump between sections.</em></p>
+<p align="right"><em>Jump to any section with the table of contents below.</em></p>
 
-# An easy to use php library for [3x-ui](https://github.com/MHSanaei/3x-ui)
+<h1 align="center">PHP 3X-UI</h1>
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./media/php_3x-ui.png">
-    <img alt="3x-ui" src="./media/php_3x-ui.png">
+    <img alt="PHP 3X-UI" src="./media/php_3x-ui.png" width="420">
   </picture>
 </p>
 
-[![Static Badge](https://img.shields.io/badge/php-v8.2-blue)](https://www.php.net/releases/8.2/en.php)
-[![Static Badge](https://img.shields.io/badge/3x--ui-v2.4.8-%2305564F)](https://github.com/MHSanaei/3x-ui/releases/tag/v2.4.8)
-[![Static Badge](https://img.shields.io/badge/Xray-v24.11.21-darkred)](https://github.com/XTLS/Xray-core/releases/tag/v24.11.21)
-[![Total Downloads](https://img.shields.io/packagist/dt/estaheri/3x-ui.svg)](https://github.com/es-taheri/3x-ui/releases/latest)
-[![Static Badge](https://img.shields.io/badge/License-MIT-%23007EC6)](https://github.com/es-taheri/3x-ui/blob/master/LICENSE)
+<p align="center">
+  <strong>A typed, fully documented PHP client for the <a href="https://github.com/MHSanaei/3x-ui">MHSanaei 3x-ui</a> panel API.</strong>
+</p>
 
-### PHP 3X-UI
+<p align="center">
+  <a href="https://packagist.org/packages/estaheri/3x-ui"><img alt="Latest Version" src="https://img.shields.io/packagist/v/estaheri/3x-ui.svg?style=flat-square"></a>
+  <a href="https://packagist.org/packages/estaheri/3x-ui"><img alt="Total Downloads" src="https://img.shields.io/packagist/dt/estaheri/3x-ui.svg?style=flat-square"></a>
+  <a href="https://www.php.net/releases/8.2/en.php"><img alt="PHP" src="https://img.shields.io/badge/php-%3E%3D8.2-blue?style=flat-square"></a>
+  <a href="https://github.com/MHSanaei/3x-ui/releases"><img alt="3x-ui" src="https://img.shields.io/badge/3x--ui-v3.x-05564F?style=flat-square"></a>
+  <a href="https://github.com/XTLS/Xray-core/releases"><img alt="Xray" src="https://img.shields.io/badge/Xray-v25.x-darkred?style=flat-square"></a>
+  <a href="https://github.com/es-taheri/3x-ui/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-007EC6?style=flat-square"></a>
+</p>
 
-**Simple open-source PHP library for managing MHSanaei 3x-ui panel without its official rest api.**
+> [!IMPORTANT]
+> This library is intended for personal and administrative use. Do not use it for illegal purposes, and test it
+> against a staging panel before running it against production. You are responsible for the traffic and users you
+> manage.
 
-> [!IMPORTANT]\
-> This library is only for personal using, please do not use it for illegal purposes, please do not use it in a
-> production environment.
+---
 
-## Quick Start
+## Table of Contents
 
-* Require library in your project 📁
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Authentication](#authentication)
+  - [Cookie session](#cookie-session)
+  - [API tokens](#api-tokens)
+  - [Session helpers](#session-helpers)
+- [Responses and errors](#responses-and-errors)
+- [Configuration objects](#configuration-objects)
+  - [Inbound protocols](#inbound-protocols)
+  - [Inbound transports](#inbound-transports)
+  - [Outbound protocols](#outbound-protocols)
+  - [Clients](#clients-config-object)
+  - [Outbounds helper](#outbounds-helper)
+- [Real-world example](#real-world-example)
+- [Endpoint reference](#endpoint-reference)
+  - [Inbounds](#inbounds)
+  - [Clients](#clients)
+  - [Hosts](#hosts)
+  - [Nodes](#nodes)
+  - [Subscription balancers](#subscription-balancers)
+  - [Server](#server)
+  - [Settings and API tokens](#settings-and-api-tokens)
+  - [Xray](#xray)
+  - [Routing](#routing)
+  - [Reverse](#reverse)
+  - [Subscription server](#subscription-server)
+  - [WebSocket events](#websocket-events)
+- [Coding style](#coding-style)
+- [Project structure](#project-structure)
+- [Compatibility](#compatibility)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
+- [Special Thanks](#special-thanks)
+- [Support project](#support-project)
 
-```
+---
+
+## Features
+
+- **Complete panel API coverage** — inbounds, clients, hosts, nodes, subscription balancers, server, settings,
+  API tokens, Xray config, routing, subscriptions and the WebSocket event stream.
+- **Typed configuration builders** for inbound/outbound protocols and transports, so you never hand-write raw
+  Xray JSON.
+- **Two authentication modes** — cookie session with automatic CSRF handling, or scoped Bearer API tokens.
+- **Parallel requests** — pass an array of ids/emails to supported methods and get `Result[]` back.
+- **Immutable result objects** — one predictable shape for HTTP status, panel envelope, payload and errors.
+- **IDE-first** — every class, property, method and parameter is PHPDoc-documented; PHPStorm completion and quick
+  documentation work out of the box.
+- **Small dependency surface** — Guzzle 7 and a tiny JSON helper. No framework required.
+- **Safe defaults** — random UUIDs and WireGuard keys, explicit nullable types, JSON bodies, no hidden globals.
+
+---
+
+## Requirements
+
+| Requirement | Version / notes |
+| --- | --- |
+| PHP | **8.2 or newer** |
+| PHP extensions | `json`, `curl`, `openssl`, `mbstring` (Guzzle requirements) |
+| Composer | 2.x |
+| 3x-ui panel | API as shipped with **v3.x** (older panels simply lack newer endpoints) |
+| Xray-core | v25.x (or whatever your panel runs) |
+
+A writable cookie directory is required when you authenticate with a username and password. The default is
+`src/.cookie` (already git-ignored) and is created automatically.
+
+---
+
+## Installation
+
+```bash
 composer require estaheri/3x-ui
 ```
 
-* Require composer autoload in your php code ⚓
+Then require the Composer autoloader:
 
 ```php
-require_once __DIR__.'/vendor/autoload.php';
+require_once __DIR__ . '/vendor/autoload.php';
 ```
 
-* Instantiating `Xui` class and set connection credentials 📡
+No service provider, bootstrap or configuration file is needed.
+
+---
+
+## Quick Start
 
 ```php
-$xui = new Xui($xui_host, $xui_port, $xui_path, $xui_ssl);
+<?php
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+use XUI\Handler\Request;
+use XUI\Xui;
+
+// 1. Build the HTTP transport.
+$request = new Request(Request::config(
+    host: 'panel.example.com',
+    port: 2053,
+    uri_path: 'ctrladmin',   // panel base path, '' or '/' when it is at the root
+    has_ssl: true,
+));
+
+// 2. Create the client.
+$xui = new Xui($request);
+
+// 3. Log in (skipped automatically when a valid cookie session exists).
+$login = $xui->login('admin', 'password');
+if ($login !== true && (!$login->ok || !$login->success)) {
+    throw new RuntimeException('Login failed: ' . ($login->error ?? $login->msg()));
+}
+
+// 4. Use any panel area.
+$status = $xui->server->status();
+var_dump($status->obj());
 ```
 
-* Login to panel using username & password 🔐
+Every panel area is a public property:
 
 ```php
-$xui->login($username, $password);
+$xui->inbounds;       // Inbounds
+$xui->clients;        // Clients (first-class entities, attachable to many inbounds)
+$xui->hosts;          // Host override groups
+$xui->nodes;          // Remote nodes managed by a central panel
+$xui->sub_balancers;  // JSON-subscription balancers
+$xui->server;         // Status, logs, backups, certificates, Xray binary
+$xui->xray;           // Xray config, routing, reverse, integrations
+$xui->settings;       // Panel settings and API tokens
+$xui->outbounds;      // Typed helper over the Xray outbound list
 ```
 
-* Now you can do anything ✅
+---
+
+## Authentication
+
+There are two supported modes. Both work for every endpoint under `/panel/api/*`.
+
+### Cookie session
+
+This is the default when no token is supplied. The library stores the session cookie in
+`src/.cookie/<host>_<port>.cookie`, reuses it across PHP processes, and fetches a fresh
+`X-CSRF-Token` after a successful login.
 
 ```php
-$xui->server; // Accessing to server methods (Status,Database,Stop/Restart Xray,...)
-$xui->xray; // Accessing to xray methods (Inbounds,Outbounds,Routing,...)
-$xui->panel; // Accessing to panel methods (Restart panel,Update/Get settings,...)
+$request = new Request(Request::config(
+    host: 'panel.example.com',
+    port: 2053,
+    uri_path: 'ctrladmin',
+    has_ssl: true,
+    cookie_dir: sys_get_temp_dir() . '/xui-cookies', // optional
+    timeout: 15,                                    // optional, seconds
+    proxy: 'http://127.0.0.1:8080',                 // optional
+    extra: ['verify' => '/etc/ssl/certs/ca.pem'],   // optional Guzzle TLS options
+));
 ```
 
-## Full Documentation
+### API tokens
 
-[Responses](#responses)\
-[Protocols](#protocols)\
-[Rules](#rules)\
-[New Xui](#new-xui)
-
-* [Login](#login)
-* [Random](#random)
-* [Uuid](#uuid)
-
-[Xray](#xray)
-
-* [Inbound](#inbound)
-* [Outbound](#outbound)
-* [Routing](#routing)
-* [Reverse](#reverse)
-* [Configs](#configs)
-
-[Server](#server)
-
-* [Status](#status)
-* [Database](#database)
-* [Xray-Restart-Stop](#xray-restart-stop)
-* [Reality-Certificate](#reality-certificate)
-* [Xui-log](#xui-log)
-
-[Panel](#panel)
-
-* [Settings](#settings)
-* [Restart](#restart)
-* [Default-Xray-Config](#default-xray-config)
-
-### Responses
-
-All methods return value based this document :
-
-- #### Methods Return
-  We have 3 types of methods return value :
-    - Object (Default)
-    - JSON
-    - Array
-
-> [!NOTE]\
-> You can set return type from `$output` property in all classes.\
-> You can set it globally when Calling `Xui` Object-oriented class.
-
-**General structure of recursive methods :**
-
-  ```php
-  $return = ['ok' => $ok, 'response' => $response, 'size' => $size, 'time_taken' => $time_taken]
-  #---------------------------------------------------------------------------------
-  $ok // Can be true/false based on request success or fail! (bool)
-  $response // response of request returned by panel (string|object|array)
-  $size // Size of response (int)
-  $time_taken // Request time taken in seconds (float)
-  ```
-
-- #### Response
-
-  We have 3 types of response in methods return value :
-    - Object (Default)
-    - JSON
-    - Array
-
-> [!NOTE]\
-> You can set response type from `$response_output` property in all classes.\
-> You can set it globally when Calling `Xui` Object-oriented class.
-
-**General structure of response :**
-
-  ```php
-  $response = ['success' => $success, 'obj' => $obj, 'msg' => $msg]
-  #---------------------------------------------------------------------------------
-  $success // Can be true/false based on action success or fail! (bool)
-  $obj // data returned. (string|object|array)
-  $msg // Message for fail actions, Similar to error! (string)
-  ```
-
-### Protocols
-
-You can create a config for inbound/outbound by calling its object-orinted class
-> [!TIP]
-> All variables and properties of protocols and streams classes and methods based on Project X official documentations.\
-> You can find full documentation of protocols and their configuration
-> on [Xtls/Xray official website](https://xtls.github.io/en/)\
-> [Inbound Protocols Docs](https://xtls.github.io/en/config/inbounds/)\
-> [Outbound Protocols Docs](https://xtls.github.io/en/config/outbounds/)\
-> [Inbound/Outbound Streams Docs](https://xtls.github.io/en/config/transport.html)
+Mint a token in **Settings → Security → API Token**, then pass it to `Request::config()`. No login call is
+required and no cookie file is written.
 
 ```php
-// Create Inbound config
-use XUI\Xray\Inbound\Protocols\Vmess\Vmess;
-$listen = '';
-$port = 12345;
-$config = new Vmess($listen, $port);
-$config->settings->add_client($enable, $uuid, $email, $total_traffic, $expiry_time, $limit_ip, $tgid, $subid, $reset);
-$config->stream_settings->ws_settings($accept_proxy_protocol,$path,$headers);
-#---------------------------------------------------------------------------------
-// Create Outbounds config
-use XUI\Xray\Outbound\Protocols\Vmess\Vmess;
-$config = new Vmess();
-$config->settings->address = 'example.3xui.net';
-$config->settings->port = 12345;
-$config->settings->add_user($uuid, $security);
-$config->stream_settings->ws_settings($accept_proxy_protocol, $path, $headers);
+$request = new Request(Request::config(
+    host: 'panel.example.com',
+    port: 2053,
+    uri_path: 'ctrladmin',
+    has_ssl: true,
+    api_token: getenv('XUI_API_TOKEN'),
+));
+
+$xui = new Xui($request);
 ```
 
-Supported Inbound protocols :
+| Scope constant | Value | Permitted operations |
+| --- | --- | --- |
+| `XUI\Settings::SCOPE_ADMIN` | `admin` | Full panel API. Treat it like the panel password. |
+| `XUI\Settings::SCOPE_MONITOR` | `monitor` | Read-only status and metrics. |
+| `XUI\Settings::SCOPE_NODE_SYNC` | `node-sync` | Manage node configuration, but not panel updates. |
+| `XUI\Settings::SCOPE_NODE_ADMIN` | `node-admin` | `node-sync` plus panel self-update. |
 
-- Vmess
-- Vless
-- Trojan
-- Shadowsocks
-- Socks
-- Http
-- DokodomoDoor
-
-Supported Outbound protocols :
-
-- Vmess
-- Vless
-- Trojan
-- Shadowsocks
-- Socks
-- Http
-- Dns
-- Blackhole
-- Freedom
-
-Supported Inbound/Outbound Streams and Security :
-
-- tcp
-- kcp
-- ws
-- http
-- quic
-- ds
-- grpc
-- sockopt
-- tls
-- reality
-
-### Rules
-
-An object-oriented class for creating a routing rule
+The plaintext token is returned only once at creation time:
 
 ```php
-use XUI\Xray\Routing\Rule;
-$rule = new Rule($inbound_tag,$outbound_tag);
-// Or
-$rule = Routing::rule($inbound_tag,$outbound_tag);
+$created = $xui->settings->create_api_token(
+    name: 'monitoring',
+    scope: XUI\Settings::SCOPE_MONITOR,
+    expires_at: 0, // 0 = never; otherwise Unix milliseconds
+);
+$plaintext = $created->obj()->token;
 ```
 
-Get or Set a rule setting :
+### Session helpers
 
 ```php
-$rule->port($value); // return true on success and false on failure
-$port = $rule->port();
+$xui->is_login();                 // bool
+$xui->csrf_token();               // Result, refreshes the CSRF token
+$xui->get_two_factor_enabled();   // Result (obj is bool)
+$xui->logout();                   // Result
+$xui->sponsors();                 // Result, public sponsor placements
 ```
 
-Rule settings supported :
+---
+
+## Responses and errors
+
+Every endpoint returns an immutable `XUI\Handler\Result` (or `Result[]` for parallel fan-out).
 
 ```php
-$rule->balancer_tag(); // Corresponds to the identifier of a balancer.
-$rule->user(); // An array where each item represents an email address.
-$rule->network(); // This can be "tcp", "udp", or "tcp,udp".
-$rule->protocol(); // An array where each item represents a protocol. ["http" | "tls" | "bittorrent"]
-$rule->domain_matcher(); // The domain matching algorithm used varies depending on the settings.
-$rule->domain(); // The domain matching algorithm used varies depending on the settings.
-$rule->ip(); // An array where each item represents an IP range.
-$rule->port(); // The target port range
-$rule->source(); // An array where each item represents an IP range in the format of IP, CIDR, GeoIP, or loading IP from a file.
-$rule->source_port(); // The source port
-$rule->attrs(); // A json object with string keys and values, used to detect the HTTP headers of the traffic.
-$rule->type(); // Currently, only the option "field" is supported.
+$result = $xui->inbounds->list();
+
+$result->ok;          // bool   HTTP round-trip succeeded
+$result->success;     // bool   panel envelope has success:true
+$result->code;        // int    HTTP status code
+$result->header;      // array|null
+$result->size;        // int    body size in bytes
+$result->time_taken;  // float  seconds
+$result->error;       // string|null transport error
+
+$result->response();                     // stdClass envelope {success, obj, msg}
+$result->response(Statics::OUTPUT_ARRAY); // array
+$result->obj();                          // obj member as stdClass
+$result->obj(Statics::OUTPUT_ARRAY);      // obj member as array
+$result->msg();                          // envelope message
+$result->raw();                          // raw body (database backups, YAML, ...)
+$result->fail();                         // {code, error} or null
 ```
 
-### New Xui
-
-Calling `Xui` Object-oriented class for creating connection to 3x-ui
+Recommended error handling:
 
 ```php
-$xui = new \XUI\Xui($host, $port, $uri_path, $has_ssl, $cookie_dir, $timeout, $proxy, $output, $response_output);
-#---------------------------------------------------------------------------------
-$host = 'localhost'; // Host address of 3x-ui panel. (Accepts Domain/Subdomain/Ipv4)
-$port = 12345; // Port of 3x-ui panel. (1-65535)
-$uri_path = '/'; // URI path of 3x-ui panel.
-$has_ssl = false; // Does panel has SSL. (Default: FALSE)
-$cookie_dir = __DIR__ . '/.cookie'; //
-$timeout = 10; // HTTP Requests timeout
-$proxy = null; // HTTP Requests proxy
-$output = \XUI\Xui::OUTPUT_OBJECT; // Type of return value of methods. Use Xui::OUTPUT_xxx to set. (Accepts json,object,array)
-$response_output = \XUI\Xui::OUTPUT_OBJECT; // Type of response value of requests. Use Xui::OUTPUT_xxx to set. (Accepts json,object,array)
+use XUI\Helper\Statics;
+
+$result = $xui->clients->create($client, [3]);
+
+if (!$result->ok) {
+    // Network / TLS / DNS problem.
+    error_log('Transport: ' . $result->error);
+} elseif (!$result->success) {
+    // The panel rejected the call.
+    error_log('Panel: ' . $result->msg());
+} else {
+    $payload = $result->obj(Statics::OUTPUT_ARRAY);
+}
 ```
 
-- #### Login
-
-  After instantiating `Xui` class must use this method to login to panel.
-
-> [!Note]\
-> Library automatically use cookie if login recently
-
-  ```php
-  $xui->login($username,$password);
-  #---------------------------------------------------------------------------------
-  $username = 'admin'; // Settings login username
-  $password = 'xxxx'; // Settings login password
-  ```
-
-- #### Random
-
-  An static method for generating random string.
-
-    ```php
-    \XUI\Xui::random($length);
-    $length = 32; // Length of random string
-    ```
-
-- #### Uuid
-
-  An static method for generating random uuid useful to set inbound/outbounds clients uuid.
-
-    ```php
-    \XUI\Xui::uuid();
-    ```
-
-### Xray
-
-A property to accessing Xray configs including Inbound,Outbound,Routing,Reverse,Others and restarting xray-core.
+`XUI\Helper\Statics` also provides small helpers:
 
 ```php
-$xray = $xui->xray;
+Statics::OUTPUT_JSON;        // JSON string
+Statics::OUTPUT_OBJECT;      // stdClass
+Statics::OUTPUT_ARRAY;       // array
+
+Statics::random(32);         // cryptographically secure random string
+Statics::uuid();             // UUID v4
+Statics::now();              // Unix milliseconds
+Statics::days_from_now(30);  // Unix milliseconds, 30 days ahead
+Statics::to_millis($seconds);
+Statics::to_seconds($millis);
+
+Statics::UNIT_BYTE;
+Statics::UNIT_KILOBYTE;
+Statics::UNIT_MEGABYTE;
+Statics::UNIT_GIGABYTE;
+Statics::UNIT_TERABYTE;
 ```
 
-- #### Inbound
+---
 
-  A property to accessing Xray configs **inbounds**.
+## Configuration objects
 
-    ```php
-    $inbound = $xray->inbound;
-    ```
+All protocol and transport settings are real classes with typed properties, so PHPStorm can complete them and
+you never edit raw JSON.
 
-  ##### Methods
+### Inbound protocols
 
-    ```php
-    # Add,Delete,Update,Get,Exist inbound
-    $inbound->add($config, $remark, $total_traffic, $expiry_time, $download, $upload, $enable);
-    $inbound->exist($inbound_id);
-    $inbound->get($inbound_id);
-    $inbound->update($inbound_id, $config, $remark, $total_traffic, $expiry_time, $download, $upload, $enable);
-    $inbound->delete($inbound_id);
-    # List,Online inbounds
-    $inbound->onlines();
-    $inbound->list();
-    # Import,Export inbound
-    $inbound->export($inbound_id);
-    $inbound->import($exported_inbound);
-    # Get,Clear client ips of inbound
-    $inbound->get_client_ips($client_email);
-    $inbound->clear_client_ips($client_email);
-    $inbound->reset_client_traffic($inbound_id, $client_email);
-    #---------------------------------------------------------------------------------
-    $config = new \XUI\Xray\Inbound\Protocols\Vmess\Vmess(); // Configured protocol object oriented class 
-    $config->settings->add_client();
-    $config->stream_settings->ws_settings(false, '/');
-    $inbound_id = 123; // ID of inbound
-    $remark = 'Me'; // Name of inbound
-    $total_traffic = 100 * \XUI\Xui::UNIT_GIGABYTE; // Total traffic of inbound. (Unit: Byte)
-    $download = 10 * \XUI\Xui::UNIT_GIGABYTE; // Download traffic usage of inbound. (Unit: Byte)
-    $upload = 500 * \XUI\Xui::UNIT_MEGABYTE; // Upload traffic usage of inbound. (Unit: Byte)
-    $enable = true; // Enable/Disable inbound
-    $expiry_time = time() + (30 * 86400); // Expiry time of inbound. (Unit: unix timestamp in seconds)
-    $exported_inbound = 'json'; // Json encoded exported inbound.
-    $client_email = 'client1234@localhost'; // Client email on inbound
-    ```
+| Protocol | Class |
+| --- | --- |
+| `vless` | `XUI\Inbounds\Protocols\Vless\Vless` |
+| `vmess` | `XUI\Inbounds\Protocols\Vmess\Vmess` |
+| `trojan` | `XUI\Inbounds\Protocols\Trojan\Trojan` |
+| `shadowsocks` | `XUI\Inbounds\Protocols\Shadowsocks\Shadowsocks` |
+| `socks` | `XUI\Inbounds\Protocols\Socks\Socks` |
+| `http` | `XUI\Inbounds\Protocols\Http\Http` |
+| `dokodemo-door` / `tunnel` | `XUI\Inbounds\Protocols\Tunnel\Tunnel` |
+| `wireguard` | `XUI\Inbounds\Protocols\WireGuard\WireGuard` |
+| `hysteria` | `XUI\Inbounds\Protocols\Hysteria\Hysteria` |
+| `mtproto` | `XUI\Inbounds\Protocols\Mtproto\Mtproto` |
+| `mixed` | `XUI\Inbounds\Protocols\Mixed\MixedInbound` |
+| `amneziawg` | `XUI\Inbounds\Protocols\AmneziaWG\AmneziaWG` |
+| anything else (`tuic`, `tun`, `masque`, ...) | `XUI\Inbounds\Settings` (generic container) |
 
-- #### Outbound
+```php
+use XUI\Inbounds\Protocols\Vless\Settings;
+use XUI\Inbounds\Protocols\Vless\Vless;
+use XUI\Inbounds\Sniffing;
+use XUI\Inbounds\StreamSettings;
 
-  A property to accessing Xray configs **outbounds**.
+// Protocol settings + one client.
+$settings = new Settings();
+$settings->add_client(email: 'alice@example.com', flow: 'xtls-rprx-vision');
 
-    ```php
-    $outbound = $xray->outbound;
-    ```
+// Transport + security.
+$stream = new StreamSettings('tcp', 'reality');
+$stream->tcp_settings();
+$stream->reality_settings(
+    private_key: $private_key,
+    public_key: $public_key,
+    dest: 'www.cloudflare.com:443',
+    server_names: ['www.cloudflare.com'],
+);
 
-  ##### Methods
+// Assemble and create it.
+$inbound = new Vless();
+$inbound->generate(port: 443, settings: $settings, stream_settings: $stream, sniffing: new Sniffing());
 
-    ```php
-    # Add,Delete,Update,Get,Exist outbound
-    $outbound->add($tag,$config,$proxy_settings,$send_through,$mux);
-    $outbound->exist($outbound_tag);
-    $outbound->get($outbound_tag);
-    $outbound->update($outbound_tag, $tag, $config, $proxy_settings, $send_through, $mux);
-    $outbound->delete($outbound_tag);
-    # List outbound
-    $outbound->list();
-    #---------------------------------------------------------------------------------
-    $config = new \XUI\Xray\Outbound\Protocols\Vmess\Vmess(); // Configured protocol object oriented class 
-    $config->settings->add_user(\XUI\Xui::uuid());
-    $config->stream_settings->ws_settings(false);
-    $tag = 'vmess-test'; // The identifier of this outbound connection
-    $proxy_settings = null; // The outbound proxy configuration.
-    $send_through = '0.0.0.0'; // The IP address used to send data.
-    $mux = []; // Specific configuration related to Mux.
-    $outbound_tag = 'vmess-test'; // The identifier of this outbound connection
-    ```
+$xui->inbounds->add($inbound, 'VLESS-443');
+```
 
-- #### Routing
+Generic container for protocols without a dedicated class:
 
-  A property to accessing Xray configs **routing**.
+```php
+use XUI\Inbounds\Settings as GenericSettings;
 
-    ```php
-    $routing = $xray->routing;
-    $loaded = $routing->load();
-    if($loaded)
-        echo "ok";
-    else
-        echo 'error';
-    ```
+$settings = GenericSettings::make('tuic', [
+    'clients' => [],
+    'congestion_control' => 'bbr',
+]);
+```
 
-> [!Note]\
-> Before using routing methods must call `load()` method to load routing configs from xray config!
+### Inbound transports
 
-##### Methods
+`XUI\Inbounds\StreamSettings` exposes:
 
-  ```php
-  # Set/Get routing domain strategy,domain matcher,balancers
-  $routing->domain_strategy();
-  $routing->domain_matcher();
-  $routing->balancers();
-  # Add,Delete,Update,Get,Exist routing rule
-  $routing->has_rule($rule_inbound_tag,$rule_outbound_tag);
-  $routing->add_rule($rule,$apply);
-  $routing->get_rule($rule_inbound_tag,$rule_outbound_tag);
-  $routing->update_rule($rule_inbound_tag,$rule_outbound_tag,$rule,$apply);
-  $routing->delete_rule($rule_inbound_tag,$rule_outbound_tag,$apply);
-  # Apply changes made to routing
-  $routing->update();
-  #---------------------------------------------------------------------------------
-  $rule_inbound_tag = ['inbound-12345','inbound-12346']; // An array where each item represents an identifier.
-  $rule_outbound_tag = 'direct'; // Corresponds to the identifier of an outbound.
-  $apply = true; // Apply changes to routing in xray config
-  $rule = \XUI\Xray\Routing\Routing::rule($inbound_tag,$outbound_tag); // Configured rule object oriented class
-  ```
+```php
+$stream->tcp_settings();          // tcp
+$stream->kcp_settings();          // kcp
+$stream->ws_settings();           // ws
+$stream->http_settings();         // http/2
+$stream->quic_settings();         // quic
+$stream->grpc_settings();         // grpc
+$stream->httpupgrade_settings();  // httpupgrade
+$stream->xhttp_settings();        // xhttp (formerly splithttp)
+$stream->ds_settings();           // domainsocket
+$stream->sockopt();               // socket options
 
-- #### Reverse
+$stream->tls_settings();          // tls
+$stream->reality_settings();      // reality
+$stream->final_mask();            // finalmask
+```
 
-  A property to accessing Xray configs **reverse**.
+Every helper accepts named arguments and has documented defaults. See
+[Xray transports](https://xtls.github.io/en/config/transport.html) and
+[REALITY](https://github.com/XTLS/REALITY/blob/main/README.en.md).
 
-    ```php
-    $reverse = $xray->reverse;
-    $loaded = $reverse->load();
-    if($loaded)
-        echo "ok";
-    else
-        echo 'error';
-    ```
+### Outbound protocols
 
-> [!Note]\
-> Before using reverse methods must call `load()` method to load reverse configs from xray config!
+`XUI\Outbounds\Protocols\{Vless,Vmess,Trojan,Shadowsocks,Socks,Http,Freedom,Dns,Blackhole}` plus
+`XUI\Outbounds\StreamSettings` for client-side transports.
 
-##### Methods
+```php
+use XUI\Outbounds\Protocols\Vless\Settings;
+use XUI\Outbounds\Protocols\Vless\Vless;
+use XUI\Outbounds\StreamSettings;
 
-  ```php
-  # Add,Delete,Update,Get,Exist reverse portal
-  $reverse->has_portal($portal_tag);
-  $reverse->add_portal($tag,$domain,$apply);
-  $reverse->get_portal($portal_tag);
-  $reverse->update_portal($portal_tag,$tag,$domain,$apply);
-  $reverse->delete_portal($portal_tag,$apply);
-  # Add,Delete,Update,Get,Exist reverse bridge
-  $reverse->has_bridge($bridge_tag);
-  $reverse->add_bridge($tag,$domain,$apply);
-  $reverse->get_bridge($bridge_tag);
-  $reverse->update_bridge($bridge_tag,$tag,$domain,$apply);
-  $reverse->delete_bridge($bridge_tag,$apply);
-  # Apply changes made to reverse
-  $reverse->update();
-  #---------------------------------------------------------------------------------
-  $portal_tag = 'portal-1'; // The identifier for the portal
-  $bridge_tag = 'bridge-1'; // The identifier for the bridge
-  $tag = 'portal-1'; // The identifier for the portal/bridge
-  $domain = 'reverse.xui'; // A domain name.
-  $apply = true; // Apply changes to reverse in xray config
-  ```
+$settings = new Settings('server.example.com', 443);
+$settings->add_user('00000000-0000-4000-8000-000000000000', flow: 'xtls-rprx-vision');
 
-- #### Configs
+$stream = new StreamSettings('ws', 'tls');
+$stream->ws_settings(path: '/ws', host: 'cdn.example.com');
+$stream->tls_settings('cdn.example.com');
 
-  Use these methods for configuring xray core or get xray core configuration.
+$outbound = new Vless();
+$outbound->generate($settings, $stream);
 
-> [!Note]\
-> You must restart xray to apply changes made to xray configurations. \
-> Use `set_config()` to apply default xray configuration got from `$xui->panel->default_xray_config()` Or set a full
-> custom xray configuration.
+$xui->outbounds->add('proxy', $outbound);
+```
 
-##### Methods
+### Clients config object
 
-  ```php
-  # Get full Xray configs
-  $xray->get_configs();
-  # Get/Update a Xray config/configs
-  $xray->get_config($config);
-  $xray->update_config($update);
-  # Set a full xray configuration
-  $xray->set_config($full_config);
-  # Restart xray core to apply changes made to xray config
-  $xray->restart();
-  # Get inbound tags
-  $xray->get_inbound_tags();
-  #---------------------------------------------------------------------------------
-  $config = 'log'; // Configuration/Configurations you want to get
-  $update = [
-      'log' => [
-          'access' => 'none',
-          'dnsLog' => false,
-          'error' => '',
-          'loglevel' => 'warning',
-          'maskAddress' => '',
-      ]
-  ]; // Configuration/Configurations you want to made to xray configs
-  $full_config = 'json'; // Json/object/array of xray full config
-  ```
+`XUI\Clients\Client` maps the panel `Client` schema one-to-one.
+
+```php
+use XUI\Clients\Client;
+
+$client = new Client('alice@example.com');
+$client->quota_gb(50);              // 50 GB in bytes
+$client->expiry_in_days(30);       // Unix milliseconds, 0 = never
+$client->limit_ip = 2;
+$client->limit_hwid = 3;
+$client->comment = 'Primary device';
+$client->group = 'staff';
+$client->reset_day = 1;            // optional calendar renewal
+
+$xui->clients->create($client, [3, 5]);
+```
+
+### Outbounds helper
+
+```php
+$xui->outbounds->list();
+$xui->outbounds->get('proxy');
+$xui->outbounds->exist('proxy');
+$xui->outbounds->add('proxy', $config);
+$xui->outbounds->update('proxy', config: $newConfig);
+$xui->outbounds->delete('proxy');
+
+// Payload conversion.
+$config = XUI\Outbounds::read($outboundPayload);
+$inbound = XUI\Outbounds::to_inbound($config, listen: '0.0.0.0', port: 443);
+```
+
+---
+
+## Real-world example
+
+Create a client on an existing inbound, then read its share links:
+
+```php
+<?php
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+use XUI\Clients\Client;
+use XUI\Handler\Request;
+use XUI\Helper\Statics;
+use XUI\Xui;
+
+$xui = new Xui(new Request(Request::config(
+    host: 'panel.example.com',
+    port: 2053,
+    uri_path: 'ctrladmin',
+    has_ssl: true,
+)));
+
+$xui->login('admin', 'password');
+
+// Find the target inbound by remark.
+$inbounds = $xui->inbounds->list()->obj(Statics::OUTPUT_ARRAY);
+$inboundId = null;
+foreach ($inbounds as $inbound) {
+    if (($inbound['remark'] ?? '') === 'VLESS-443') {
+        $inboundId = (int)$inbound['id'];
+        break;
+    }
+}
+if ($inboundId === null) {
+    throw new RuntimeException('Inbound not found.');
+}
+
+// Create the client on it.
+$client = new Client('alice@example.com');
+$client->quota_gb(50)->expiry_in_days(30);
+
+$created = $xui->clients->create($client, [$inboundId]);
+if (!$created->ok || !$created->success) {
+    throw new RuntimeException('Create failed: ' . ($created->error ?? $created->msg()));
+}
+
+// Read every URL for the client.
+$links = $xui->clients->links('alice@example.com')->obj(Statics::OUTPUT_ARRAY);
+foreach ($links as $link) {
+    echo $link, PHP_EOL;
+}
+```
+
+---
+
+## Endpoint reference
+
+All methods return `Result` unless stated otherwise. Methods documented with `array` arguments are the parallel
+variants and return `Result[]`.
+
+### Inbounds
+
+```php
+$xui->inbounds->list();                       // full inbound list
+$xui->inbounds->list(slim: true);             // compact client list
+$xui->inbounds->options();                    // picker projection (id, remark, protocol, ...)
+$xui->inbounds->all_links();                  // every share link across all inbounds
+$xui->inbounds->amneziawg_kernel_readiness(); // kernel-mode capability
+
+$xui->inbounds->get(3);                       // Result
+$xui->inbounds->get([3, 5]);                  // Result[]
+$xui->inbounds->add($config, 'VLESS-443', port: 443);
+$xui->inbounds->bulk_add([
+    ['config' => $vless, 'remark' => 'VLESS-443', 'port' => 443],
+]);
+$xui->inbounds->update(3, $fullPayload);      // body mirrors add()
+$xui->inbounds->set_enable(3, false);
+$xui->inbounds->set_sub_sort_index(3, 2);
+$xui->inbounds->reset_traffic([3, 5]);
+$xui->inbounds->delete_all_clients(3);
+$xui->inbounds->reset_all_traffics();
+$xui->inbounds->delete(3);                    // pass an array for bulk delete
+$xui->inbounds->import($json);
+$xui->inbounds->fallbacks(3);                 // read
+$xui->inbounds->fallbacks(3, $replace);       // replace
+$xui->inbounds->push_client_traffics($guid, $rows);
+
+// Conversion helpers.
+$config = XUI\Inbounds::read($inboundPayload);
+$outbound = XUI\Inbounds::to_outbound('1.2.3.4', $config);
+```
+
+### Clients
+
+```php
+// Listing and lookup.
+$xui->clients->list();
+$xui->clients->paged(page: 1, page_size: 25, search: 'alice', filter: 'active');
+$xui->clients->get('alice@example.com');
+$xui->clients->get_by_sub_id($sub_id);
+$xui->clients->get_by_tg_id(123456789);
+
+// Create / update / delete.
+$xui->clients->create($client, [3, 5]);
+$xui->clients->bulk_create([
+    ['client' => $clientA, 'inboundIds' => [3]],
+    ['client' => $clientB, 'inboundIds' => [3, 5]],
+]);
+$xui->clients->update('alice@example.com', $client);
+$xui->clients->renewal_preview([
+    'expiryTime' => 0, 'reset' => 30, 'resetDay' => 0,
+    'resetWeekday' => 0, 'resetMax' => 0, 'resetCount' => 0,
+]);
+$xui->clients->delete('alice@example.com', keep_traffic: true);
+
+// Attach / detach.
+$xui->clients->attach('alice@example.com', [7]);
+$xui->clients->bulk_attach(['a', 'b'], [7, 9]);
+$xui->clients->detach('alice@example.com', [5]);
+$xui->clients->bulk_detach(['a', 'b'], [5]);
+
+// Bulk operations.
+$xui->clients->bulk_adjust(['a', 'b'], add_days: 30, add_bytes: 53687091200);
+$xui->clients->bulk_enable(['a', 'b']);
+$xui->clients->bulk_disable(['a', 'b']);
+$xui->clients->bulk_delete(['a', 'b']);
+$xui->clients->reset_traffic('alice@example.com');
+$xui->clients->reset_all_traffics();
+$xui->clients->delete_depleted();
+$xui->clients->delete_orphans();
+$xui->clients->export();
+$xui->clients->import($json);
+
+// Groups.
+$xui->clients->groups();
+$xui->clients->group_emails('staff');
+$xui->clients->group_create('staff');
+$xui->clients->group_rename('staff', 'tier-1');
+$xui->clients->group_bulk_add(['a', 'b'], 'staff');
+$xui->clients->group_bulk_remove(['a']);
+$xui->clients->group_reset_traffic('staff');
+$xui->clients->group_delete('staff');
+
+// Traffic, IPs and devices.
+$xui->clients->traffic('alice@example.com');
+$xui->clients->update_traffic('alice@example.com', 1024, 2048);
+$xui->clients->ips('alice@example.com');
+$xui->clients->clear_ips('alice@example.com');
+$xui->clients->hwids('alice@example.com');
+$xui->clients->delete_hwids('alice@example.com');
+$xui->clients->delete_hwid('alice@example.com', 1);
+
+// Presence and links.
+$xui->clients->onlines();
+$xui->clients->onlines_by_guid();
+$xui->clients->client_ips_by_guid();
+$xui->clients->active_inbounds();
+$xui->clients->last_online();
+$xui->clients->links('alice@example.com');
+$xui->clients->sub_links($sub_id);
+$xui->clients->happ_link(12);
+$xui->clients->external_links('alice@example.com', $links);
+```
+
+### Hosts
+
+```php
+$xui->hosts->list();
+$xui->hosts->raw();
+$xui->hosts->get($group_id);
+$xui->hosts->by_inbound(1);
+$xui->hosts->tags();
+$xui->hosts->add([
+    'inboundIds' => [1],
+    'hosts' => ['cdn.example.com'],
+    'port' => 8443,
+    'security' => 'same',
+    'remark' => 'cdn-front',
+]);
+$xui->hosts->update($group_id, $host);
+$xui->hosts->set_enable($group_id, false);
+$xui->hosts->reorder([$group_id]);
+$xui->hosts->bulk_add($host);
+$xui->hosts->bulk_set_enable([$group_id], false);
+$xui->hosts->bulk_delete([$group_id]);
+$xui->hosts->delete($group_id);
+```
+
+### Nodes
+
+```php
+$xui->nodes->list();
+$xui->nodes->get(1);
+$xui->nodes->add([
+    'name' => 'de-fra-1',
+    'scheme' => 'https',
+    'address' => 'node1.example.com',
+    'port' => 2053,
+    'basePath' => '/',
+    'apiToken' => '...',
+    'enable' => true,
+]);
+$xui->nodes->update(1, $node);
+$xui->nodes->set_enable(1, false);
+$xui->nodes->probe(1);
+$xui->nodes->test($node);
+$xui->nodes->cert_fingerprint($node);
+$xui->nodes->inbounds($node);
+$xui->nodes->update_panel([1, 2], dev: false);
+$xui->nodes->history(1, 'cpu', 60);
+$xui->nodes->web_cert(1);
+$xui->nodes->mtls_ca();
+$xui->nodes->mtls_trust_ca($pem);
+$xui->nodes->mtls_reload_client();
+$xui->nodes->delete(1);
+```
+
+### Subscription balancers
+
+```php
+$xui->sub_balancers->list();
+$xui->sub_balancers->create(
+    remark: 'auto-fastest',
+    inbound_ids: [1, 3],
+    strategy: XUI\SubBalancers::STRATEGY_LEAST_PING,
+    sort_order: 1,
+);
+$xui->sub_balancers->update(1, 'auto-fastest', [1, 3], 'leastLoad', 1, true, [1 => 0.5]);
+$xui->sub_balancers->delete(1);
+```
+
+Strategies: `leastLoad`, `leastPing`, `random`, `roundRobin` (constants `STRATEGY_*`).
 
 ### Server
 
-A property to accessing server status,panel database,restart/stop xray,xui logs,...
-
 ```php
-$server = $xui->server;
+// Status and metrics.
+$xui->server->status();
+$xui->server->fail2ban_status();
+$xui->server->history('cpu', 60);
+$xui->server->cpu_history(60);
+$xui->server->xray_metrics_state();
+$xui->server->xray_metrics_history('xrAlloc', 60);
+$xui->server->xray_observatory();
+$xui->server->xray_observatory_history('proxy', 60);
+
+// Versions and updates.
+$xui->server->xray_versions();
+$xui->server->panel_update_info();
+$xui->server->update_status();
+$xui->server->update_panel();
+$xui->server->set_update_channel(dev: false);
+
+// Config, backups and database.
+$xui->server->config_json();
+$xui->server->get_db();          // raw bytes in Result::raw()
+$xui->server->get_migration();
+$xui->server->import_db('/tmp/backup.db');
+$xui->server->new_uuid();
+$xui->server->web_cert_files();
+$xui->server->descendants();
+
+// Key and certificate helpers.
+$xui->server->new_x25519_cert();
+$xui->server->new_mldsa65();
+$xui->server->new_mlkem768();
+$xui->server->new_vless_enc();
+$xui->server->new_ech_cert('example.com');
+$xui->server->cert_hash(cert_file: '/etc/ssl/cert.pem');
+$xui->server->remote_cert_hash('cloudflare-dns.com');
+$xui->server->scan_reality_target('www.cloudflare.com:443');
+$xui->server->scan_reality_targets('104.16.0.0/24');
+
+// Logs and services.
+$xui->server->logs(100, level: 'warning');
+$xui->server->xray_logs(100, filter: 'alice');
+$xui->server->amneziawg_logs(100);
+$xui->server->install_xray('latest');
+$xui->server->stop_xray();
+$xui->server->restart_xray();
+$xui->server->update_geofile('geosite.dat');
+
+// Cluster IP sync and OpenAPI.
+$xui->server->client_ips();
+$xui->server->push_client_ips($rows);
+$xui->server->openapi();
 ```
 
-- #### Status
-  Use this method to get a full information about server resources and usage of it and information about xray-core.
-    ```php
-    $server->status();
-    ```
-- #### Database
-  Import / Export panel SQLLite database.
-    ```php
-    $server->get_db($path);
-    $server->import_db($path_or_db);
-    #---------------------------------------------------------------------------------
-    $path = '/www/wwwroot/xui.example.com/x-ui.db'; // Path to .db file for exporting panel database
-    $path_or_db = '/www/wwwroot/xui.example.com/x-ui.db'; // Path to .db file of exported panel database
-    ```
-- #### Xray-Restart-Stop
-  Restart / Stop Xray-core
-    ```php
-    $server->restart_xray();
-    $server->stop_xray();
-    ```
-- #### Reality-Certificate
-  Use this method to get a x25519 certificate for reality
-    ```php
-    $server->get_x25519_cert();
-    ```
-- #### Xray-Full-Config
-  Use this method to get xray-core fully config included inbounds,...
-    ```php
-    $server->get_xray_config();
-    ```
-- #### Xui-log
-  Get xui logs
-    ```php
-    $server->get_xui_log($count, $level, $syslog);
-    #---------------------------------------------------------------------------------
-    $count = 10; // Count of logs
-    $level = 'notice'; // Logs level (debug,info,notice,warning,error)
-    $syslog = true; // Enable/Disable syslog output
-    ```
+Backup to Telegram:
 
-### Panel
+```php
+$xui->send_backup_to_tg_bot();
+```
 
-A property to accessing panel settings,restart panel,default xray config.
+### Settings and API tokens
 
-- #### Settings
-  Methods to get/update 3x-ui panel settings.
-  ##### Methods
-    ```php
-    # Get panel full settings
-    $panel->settings();
-    # Get a setting/ settings from panel settings
-    $panel->get_setting($setting);
-    # Update panel settings
-    $panel->update_setting($update);
-    #---------------------------------------------------------------------------------
-    $setting = 'webPort'; // Specified setting you want to get
-    $update = ['webPort'=>1234]; // Changes you want to made to Settings settings 
-    ```
-- #### Restart
-  Restart 3x-ui panel (Only panel!)
-    ```php
-    $panel->restart();
-    ```
-- #### Default-Xray-Config
-  Get default xray config based on panel and xray-core version. (Only Xray default config!)
-    ```php
-    $panel->default_xray_config();
-    ```
+```php
+$xui->settings->settings();
+$xui->settings->get('webPort');
+$xui->settings->update(['webPort' => 2053]);
+$xui->settings->default_settings();
+$xui->settings->factory_defaults();
+$xui->settings->default_xray_config();
+$xui->settings->validate_regex('(?m)^general-purpose$');
+$xui->settings->update_user('admin', 'old', 'admin2', 'new');
+$xui->settings->restart();
+$xui->settings->test_smtp();
+$xui->settings->test_tg_bot();
+$xui->settings->test_discord();
+$xui->settings->tg_bot_capabilities();
 
-## Special Thanks to
+$xui->settings->api_tokens();
+$xui->settings->create_api_token('monitoring', XUI\Settings::SCOPE_MONITOR);
+$xui->settings->set_api_token_enabled(2, false, XUI\Settings::SCOPE_MONITOR);
+$xui->settings->delete_api_token(2, XUI\Settings::SCOPE_MONITOR);
+```
 
-- [MHSanaei](https://github.com/MHSanaei)
-- [alireza0](https://github.com/alireza0/)
+### Xray
+
+```php
+// Config template.
+$xui->xray->template();
+$xui->xray->settings();                 // stdClass config tree
+$xui->xray->get('routing');
+$xui->xray->update(['log' => ['loglevel' => 'warning']]);
+$xui->xray->set($fullConfig);
+$xui->xray->default_config();
+$xui->xray->outbounds_traffic();
+$xui->xray->result();
+$xui->xray->reset_outbounds_traffic('proxy');
+
+// Config testing and live routing state.
+$xui->xray->test_outbound($outbound, $allOutbounds, 'tcp');
+$xui->xray->test_outbounds($outbounds, $allOutbounds, 'real');
+$xui->xray->balancer_status('b1,b2');
+$xui->xray->balancer_override('b1', 'proxy');
+$xui->xray->route_test(['domain' => 'example.com', 'port' => 443]);
+
+// Third-party integrations.
+$xui->xray->warp('reg', ['privateKey' => $priv, 'publicKey' => $pub]);
+$xui->xray->nord('countries');
+$xui->xray->pia('countries');
+
+// Geodata.
+$xui->xray->geodata_files();
+$xui->xray->geodata_categories('geosite.dat', q: 'goog');
+$xui->xray->geodata_entries('geosite.dat', 'google', limit: 100);
+$xui->xray->geodata_validate(['geosite:google', 'geosite:missing']);
+
+// Outbound subscriptions.
+$xui->xray->outbound_subs();
+$xui->xray->create_outbound_sub('https://example.com/sub');
+$xui->xray->update_outbound_sub(1, 'https://example.com/sub', ['remark' => 'upstream']);
+$xui->xray->refresh_outbound_sub(1);
+$xui->xray->move_outbound_sub(1, 'up');
+$xui->xray->parse_outbound_sub('https://example.com/sub');
+$xui->xray->delete_outbound_sub(1);
+```
+
+### Routing
+
+```php
+use XUI\Xray\Routing\Routing;
+
+$routing = $xui->xray->routing();
+if ($routing !== false) {
+    $rule = Routing::rule('in-443', 'proxy')
+        ->domain(['geosite:google', 'domain:example.com'])
+        ->network('tcp');
+
+    $routing->add_rule($rule);
+    $routing->get_rule('in-443', 'proxy');
+    $routing->update_rule('in-443', 'proxy', $rule);
+    $routing->delete_rule('in-443', 'proxy');
+    $routing->has_rule('in-443', 'proxy');
+
+    $balancer = Routing::balancer('auto')
+        ->selector(['proxy-'])
+        ->strategy_type('leastPing');
+    $routing->add_balancer($balancer);
+}
+```
+
+`Rule` and `Balancer` expose fluent getters/setters documented through `@method` blocks, so PHPStorm completes
+`domain()`, `port()`, `selector()`, `strategy_type()` and friends.
+
+### Reverse
+
+Removed from 3x-ui v2.9.4, kept for older panels.
+
+```php
+$reverse = $xui->xray->reverse();
+if ($reverse !== false) {
+    $reverse->add_bridge('bridge-1', 'reverse.xui');
+    $reverse->add_portal('portal-1', 'reverse.xui');
+    $reverse->update();
+}
+```
+
+### Subscription server
+
+The subscription server runs on its own port (default `2096`). Point a second `Request` at it and use
+`XUI\Subscriptions` with the path prefixes configured in **Settings → Subscription**.
+
+```php
+use XUI\Handler\Request;
+use XUI\Subscriptions;
+
+$subscriptions = new Subscriptions(new Request(Request::config('panel.example.com', 2096)));
+
+$subscriptions->links('/sub/', $sub_id);        // base64 body
+$subscriptions->links_array('/sub/', $sub_id);  // decoded link list
+$subscriptions->info('/sub/', $sub_id);         // ?format=info
+$subscriptions->page('/sub/', $sub_id);         // HTML info page
+$subscriptions->hwid_status('/sub/', $sub_id);
+$subscriptions->json('/json/', $sub_id);        // Xray JSON subscription
+$subscriptions->clash('/clash/', $sub_id);      // Clash/Mihomo YAML
+```
+
+### WebSocket events
+
+The panel pushes real-time events on `/ws` (session cookie required):
+
+```php
+$xui->websocket_url(); // ws://panel.example.com:2053/ctrladmin/ws
+```
+
+Each message uses `{type, payload, time}` with `time` in Unix milliseconds.
+`XUI\Handler\WebSocketEvent` names every event and decodes one message:
+
+```php
+use XUI\Handler\WebSocketEvent;
+
+$message = WebSocketEvent::decode($rawMessage);
+
+switch ($message['type']) {
+    case WebSocketEvent::STATUS:
+        $status = WebSocketEvent::payload($message['payload']);
+        break;
+
+    case WebSocketEvent::TRAFFIC:
+        $traffic = WebSocketEvent::payload($message['payload']);
+        break;
+
+    case WebSocketEvent::INVALIDATE:
+        // Re-fetch the REST resource named by $message['payload']['type'].
+        break;
+}
+```
+
+Event types: `status`, `traffic`, `client_stats`, `inbounds`, `outbounds`, `nodes`, `notification`,
+`xray_state`, `invalidate`. Xray states: `running`, `stop`, `error`.
+
+---
+
+## Coding style
+
+The library follows one consistent style. Contributions must match it.
+
+- **PHP 8.2**, PSR-4 autoloading, namespace root `XUI\` mapped to `src/`.
+- **4 spaces**, no tabs, one blank line between methods, no closing `?>` tag.
+- **Class names** are `StudlyCase`. **Methods, properties and variables** are `snake_case`.
+- **Constants** are `UPPER_SNAKE_CASE` (`UNIT_GIGABYTE`, `SCOPE_ADMIN`). Protocol cipher constants keep the
+  cipher name (`METHOD_aes_128_gcm`) because the constant name is the wire value.
+- **Explicit nullable types**: `?string $value = null`, never the implicit `string $value = null`.
+- **Every class, property and method has a PHPDoc block.** Public methods document `@param`, `@return`, and
+  `@link` to the matching Xray documentation when one exists.
+- **Return types are declared**, and unions are used where the panel returns different shapes.
+- **Magic accessors declare `@method` blocks** so the fluent API stays discoverable.
+- **One responsibility per class.** Protocol/transport configuration lives in `XUI\Inbounds\Protocols\*` and
+  `XUI\Outbounds\Protocols\*`, never in endpoint classes.
+- **Endpoint classes only build requests** through the private `_request()` / `_requests()` helpers and return
+  `Result` (or `Result[]`).
+- **Panel names stay camelCase on the wire.** PHP maps snake_case to the API key in one place, so request
+  bodies are easy to audit.
+- **`match`** is used for protocol/transport dispatch instead of long expression `switch` blocks.
+- **No `declare(strict_types=1)`** and no static-analysis suppressions.
+- **No hidden side effects**: configuration builders are pure; network calls happen only in endpoint classes.
+
+---
+
+## Project structure
+
+```text
+src/
+├── Clients.php                     Clients endpoints
+├── Clients/
+│   └── Client.php                  Typed client payload
+├── Handler/
+│   ├── Request.php                 Guzzle wrapper, auth, CSRF, routing
+│   ├── Result.php                  Immutable response object
+│   └── WebSocketEvent.php          WebSocket event names + decoder
+├── Helper/
+│   ├── Happ.php                    Happ share-link generator
+│   └── Statics.php                 Constants and small helpers
+├── Hosts.php                       Host override groups
+├── Inbounds.php                    Inbounds endpoints + conversions
+├── Inbounds/
+│   ├── InboundConfig.php           Contract for protocol builders
+│   ├── Settings.php                Generic protocol settings
+│   ├── Sniffing.php                Sniffing builder
+│   ├── StreamSettings.php          Inbound transport builder
+│   └── Protocols/
+│       ├── AmneziaWG/              Settings, ServerSettings, AmneziaWG
+│       ├── Http/                   Settings, Http
+│       ├── Hysteria/               Settings, Hysteria
+│       ├── Mixed/                  Settings, MixedInbound
+│       ├── Mtproto/                Settings, Mtproto
+│       ├── Shadowsocks/            Settings, Shadowsocks
+│       ├── Socks/                  Settings, Socks
+│       ├── Trojan/                 Settings, Trojan
+│       ├── Tunnel/                 Settings, Tunnel
+│       ├── Vless/                  Settings, Vless
+│       ├── Vmess/                  Settings, Vmess
+│       ├── WireGuard/              Settings, WireGuard
+│       └── InboundTrait.php        Shared InboundConfig implementation
+├── Nodes.php                       Remote node endpoints
+├── Outbounds.php                   Typed outbound helper
+├── Outbounds/
+│   ├── StreamSettings.php          Outbound transport builder
+│   └── Protocols/                  Blackhole, Dns, Freedom, Http, Shadowsocks,
+│                                   Socks, Trojan, Vless, Vmess
+├── Server.php                      Status, logs, backups, certificates
+├── Settings.php                    Panel settings + API tokens
+├── Settings/
+│   └── Settings.php                Panel settings container
+├── SubBalancers.php                JSON-subscription balancers
+├── Subscriptions.php               Subscription server client
+├── Xray.php                        Xray config, integrations, tests
+├── Xray/
+│   ├── Reverse/Reverse.php         Reverse section
+│   ├── Routing/                    Routing, Rule, Balancer
+│   └── Settings.php                Xray config container
+└── Xui.php                         Entry point
+```
+
+---
+
+## Compatibility
+
+| Component | Tested / supported |
+| --- | --- |
+| PHP | 8.2, 8.3, 8.4 |
+| 3x-ui | v3.x API (some features such as nodes, AmneziaWG and subscription balancers are panel-version dependent) |
+| Xray-core | v25.x config schema (transports and security as documented by XTLS) |
+| Guzzle | `^7.11` |
+| estaheri/json | `^1.1.3` |
+
+Older 3x-ui releases may return `404` for newer endpoints; the corresponding methods will then return a failed
+`Result` instead of throwing.
+
+---
+
+## Troubleshooting
+
+**Login fails with `success: false`**
+Check the panel path and port. If 2FA is enabled, pass the OTP as the third argument:
+`$xui->login($user, $password, $code)`.
+
+**`401` / `403` after the session worked before**
+The cookie expired. Call `$xui->login()` again or switch to a Bearer token. Cookie files live in
+`src/.cookie` by default; make sure the directory is writable by the PHP process.
+
+**CSRF errors on cookie sessions**
+The token is refreshed automatically after login. If you log in outside the library, call
+`$xui->csrf_token()` once before making unsafe requests.
+
+**TLS verification fails on a self-signed panel**
+Prefer pinning the certificate:
+
+```php
+$request = new Request(Request::config(
+    host: 'panel.local',
+    port: 2053,
+    has_ssl: true,
+    extra: ['verify' => '/path/to/ca.pem'],
+));
+```
+
+Disabling verification (`extra: ['verify' => false]`) is intended for local development only.
+
+**Requests hang**
+Pass `timeout: 15` to `Request::config()` and make sure the panel is reachable from the PHP host (the panel
+may be firewalled to the browser network only).
+
+**A monitor token cannot create clients**
+That is expected: `monitor` is read-only. Use an `admin` token or a cookie session.
+
+**Database restore uploads fail**
+`import_db()` streams the file as multipart `db`. Check PHP `upload_max_filesize` / `post_max_size` on the
+panel host.
+
+---
+
+## Contributing
+
+1. Fork the repository and create a branch.
+2. Match the [coding style](#coding-style) and keep PHPDoc complete.
+3. Run `php -l` on every changed file and `composer validate`.
+4. Keep pull requests focused: one feature/fix per PR.
+5. Describe the affected 3x-ui version and, when relevant, the Xray transport/protocol.
+
+Bug reports are most useful with: PHP version, 3x-ui version, the endpoint/method called, the request payload
+(with secrets removed) and the returned `Result` fields (`code`, `msg`, `error`).
+
+---
+
+## Security
+
+- **Never commit credentials, API tokens or cookie files.** `.cookie/` is git-ignored; keep `.env` files out of
+  the repository.
+- **Treat `admin` API tokens like the panel password.** The panel stores only their SHA-256 hash, but the
+  plaintext is returned once at creation, so store it in a secret manager or environment variable.
+- **Prefer scoped tokens** (`monitor`, `node-sync`, `node-admin`) for automation that does not need full access.
+- **Keep TLS verification enabled** outside local development, and pin certificates when possible.
+- **Back up the panel database before destructive calls** such as `import_db()`, `delete_orphans()`,
+  `delete_depleted()`, `reset_all_traffics()` or panel/node updates.
+
+---
+
+## License
+
+This library is released under the [MIT License](./LICENSE).
+
+---
+
+## Special Thanks
+
+- [MHSanaei](https://github.com/MHSanaei) — 3x-ui panel
+- [alireza0](https://github.com/alireza0/) — 3x-ui contributors
+
+---
 
 ## Support project
 
 ### Give Star ⭐
 
-**If this library is helpful to you, you may wish to give it a STAR**
+**If this library is helpful to you, please consider giving it a star.**
 
 ### Donate 💵
 
-**Help me improve this library by a donate** ❤️
+**Help improve this library with a donation** ❤️
 
-- TRX : `TXFE1je6Ed7fADvxAQXXo2g45eQtXvwith`
-- TON : `UQDb44qyae9n0hmgay3Bs_oom6RR8cZbLF5_9UCei0q13T0b`
+- TRX: `TXFE1je6Ed7fADvxAQXXo2g45eQtXvwith`
+- TON: `UQDb44qyae9n0hmgay3Bs_oom6RR8cZbLF5_9UCei0q13T0b`
 - USDT (TRON): `TCTyFGJVkCgruAYmvPpetF6jVybuZSpTg6`
 - USDT (TRX): `UQBnnLMdbAH6Pq86lsH9jEySH-D5___ctqUFKiuBXnd74FTD`

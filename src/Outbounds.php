@@ -2,17 +2,9 @@
 
 namespace XUI;
 
-use JSON\json;
 use XUI\Handler\Request;
 use XUI\Handler\Result;
 use XUI\Helper\Statics;
-use XUI\Inbounds\Protocols\Http\Http as ib_Http;
-use XUI\Inbounds\Protocols\Shadowsocks\Shadowsocks as ib_Shadowsocks;
-use XUI\Inbounds\Protocols\Socks\Socks as ib_Socks;
-use XUI\Inbounds\Protocols\Trojan\Trojan as ib_Trojan;
-use XUI\Inbounds\Protocols\Vless\Vless as ib_Vless;
-use XUI\Inbounds\Protocols\Vmess\Vmess as ib_Vmess;
-use XUI\Inbounds\StreamSettings as ib_StreamSettings;
 use XUI\Outbounds\Protocols\Blackhole\Blackhole;
 use XUI\Outbounds\Protocols\Dns\Dns;
 use XUI\Outbounds\Protocols\Freedom\Freedom;
@@ -22,367 +14,457 @@ use XUI\Outbounds\Protocols\Socks\Socks;
 use XUI\Outbounds\Protocols\Trojan\Trojan;
 use XUI\Outbounds\Protocols\Vless\Vless;
 use XUI\Outbounds\Protocols\Vmess\Vmess;
+use XUI\Outbounds\StreamSettings as OutboundStreamSettings;
 
+/**
+ * Outbound helpers backed by the panel's Xray config template.
+ *
+ * The panel API has no dedicated outbound endpoints, so outbounds are read and
+ * written through `/panel/api/xray/` ({@see Xray}) while this class offers a
+ * typed, tag-oriented view on top of it.
+ */
 class Outbounds
 {
-    private Xray $xray;
+    /** Lazily created Xray helper. */
+    private ?Xray $xray = null;
 
-    public function __construct(private readonly Request $request)
+    /**
+     * @param Request $request Shared HTTP transport.
+     */
+    public function __construct(
+        /** @var Request Shared HTTP transport. */
+        private readonly Request $request
+    )
     {
     }
 
     /**
-     * Add outbound
-     * @param string $tag
-     * @param Vmess|Vless|Trojan|Shadowsocks|Socks|Http|Freedom|Dns|Blackhole $config
-     * @param array|null $proxy_settings
-     * @param string $send_through
-     * @param array $mux
+     * Append an outbound to the Xray config.
+     *
+     * @param string $tag Unique outbound tag.
+     * @param Vmess|Vless|Trojan|Shadowsocks|Socks|Http|Freedom|Dns|Blackhole $config Outbound configuration.
+     * @param array|null $proxy_settings Optional `proxySettings` object.
+     * @param string $send_through Source address used for outgoing connections.
+     * @param array $mux Optional `mux` object.
      * @return Result
      */
     public function add(
-        string $tag, Vmess|Vless|Trojan|Shadowsocks|Socks|Http|Freedom|Dns|Blackhole $config, array $proxy_settings = null,
-        string $send_through = '0.0.0.0', array $mux = []
+        string $tag,
+        Vmess|Vless|Trojan|Shadowsocks|Socks|Http|Freedom|Dns|Blackhole $config,
+        ?array $proxy_settings = null,
+        string $send_through = '0.0.0.0',
+        array $mux = []
     ): Result
     {
-        $protocol = $config->protocol;
-        if (!isset($this->xray)) $this->xray = new Xray($this->request);
-        $result = $this->xray->get('outbounds');
-        if ($result->ok && $result->success) {
-            $xray_outbounds = $result->response(Statics::OUTPUT_ARRAY);
-            if (isset($config->stream_settings))
-                $stream_settings = $config->stream_settings->stream_settings();
-            else
-                $stream_settings = [];
-            $outbound = [
-                'sendThrough' => $send_through,
-                'protocol' => $protocol,
-                'settings' => $config->settings->settings(),
-                'tag' => $tag,
-                'streamSettings' => $stream_settings,
-            ];
-            if (!empty($proxy_settings)) $outbound['proxySettings'] = $proxy_settings;
-            if (!empty($mux)) $outbound['mux'] = $mux;
-            $xray_outbounds[] = $outbound;
-            return $this->xray->update(['outbounds' => $xray_outbounds]);
-        } else {
+        $xray = $this->xray();
+        $result = $xray->get('outbounds');
+        if (!$result->ok || !$result->success) {
             return $result;
         }
+
+        $outbounds = (array)$result->obj(Statics::OUTPUT_ARRAY);
+        $outbound = [
+            'sendThrough' => $send_through,
+            'protocol' => $config->protocol,
+            'settings' => $config->settings->settings(),
+            'tag' => $tag,
+            'streamSettings' => isset($config->stream_settings) ? $config->stream_settings->stream_settings() : [],
+        ];
+        if (!empty($proxy_settings)) {
+            $outbound['proxySettings'] = $proxy_settings;
+        }
+        if (!empty($mux)) {
+            $outbound['mux'] = $mux;
+        }
+        $outbounds[] = $outbound;
+
+        return $xray->update(['outbounds' => $outbounds]);
     }
 
     /**
-     * List all outbounds from xray config.\
-     * Similar $xray->get_config('outbounds')
-     * @param int $output
-     * @return Result|string|array
+     * List every outbound of the current Xray config.
+     *
+     * @return Result
      */
-    public function list(int $output = Statics::OUTPUT_OBJECT): Result|string|array
+    public function list(): Result
     {
-        if (!isset($this->xray)) $this->xray = new Xray($this->request);
-        return $this->xray->get('outbounds', output: $output);
+        return $this->xray()->get('outbounds');
     }
 
     /**
-     * Get an outbound
-     * @param string $outbound_tag
+     * Fetch one outbound by tag.
+     *
+     * @param string $outbound_tag Outbound tag.
      * @return Result
      */
     public function get(string $outbound_tag): Result
     {
-        if (!isset($this->xray)) $this->xray = new Xray($this->request);
-        $result = $this->xray->get('outbounds');
-        if ($result->ok && $result->success) {
-            $xray_outbounds = $result->response(Statics::OUTPUT_ARRAY);
-            foreach ($xray_outbounds as $outbound):
-                if ($outbound['tag'] == $outbound_tag)
-                    return Result::make_ok(Result::make_response(true, $outbound));
-            endforeach;
-            return Result::make_fail(404, 'Outbound tag not found');
-        } else {
+        $result = $this->list();
+        if (!$result->ok || !$result->success) {
             return $result;
         }
+        foreach ((array)$result->obj(Statics::OUTPUT_ARRAY) as $outbound) {
+            if (($outbound['tag'] ?? null) === $outbound_tag) {
+                return Result::make_ok(Result::make_response(true, $outbound));
+            }
+        }
+        return Result::make_fail(404, 'Outbound tag not found');
     }
 
     /**
-     * Check outbound availability.
-     * @param string $outbound_tag
+     * Check whether an outbound tag exists.
+     *
+     * @param string $outbound_tag Outbound tag.
      * @return bool
      */
     public function exist(string $outbound_tag): bool
     {
-        if (!isset($this->xray)) $this->xray = new Xray($this->request);
-        $result = $this->xray->get('outbounds');
-        if ($result->ok && $result->success):
-            $xray_outbounds = $result->response(Statics::OUTPUT_ARRAY);
-            foreach ($xray_outbounds as $outbound):
-                if ($outbound['tag'] == $outbound_tag)
-                    return true;
-            endforeach;
-        endif;
+        $result = $this->list();
+        if (!$result->ok || !$result->success) {
+            return false;
+        }
+        foreach ((array)$result->obj(Statics::OUTPUT_ARRAY) as $outbound) {
+            if (($outbound['tag'] ?? null) === $outbound_tag) {
+                return true;
+            }
+        }
         return false;
     }
 
     /**
-     * Update an outbound
-     * @param string $outbound_tag
-     * @param string|null $tag
-     * @param Vmess|Vless|Trojan|Shadowsocks|Socks|Http|Freedom|Dns|Blackhole|null $config
-     * @param array|null $proxy_settings
-     * @param string|null $send_through
-     * @param array|null $mux
+     * Replace an outbound.
+     *
+     * @param string $outbound_tag Tag of the outbound to update.
+     * @param string|null $tag New tag, unchanged when omitted.
+     * @param Vmess|Vless|Trojan|Shadowsocks|Socks|Http|Freedom|Dns|Blackhole|null $config New configuration, unchanged when omitted.
+     * @param array|null $proxy_settings New `proxySettings`, unchanged when omitted.
+     * @param string|null $send_through New `sendThrough`, unchanged when omitted.
+     * @param array|null $mux New `mux`, unchanged when omitted.
      * @return Result
      */
     public function update(
-        string $outbound_tag, string $tag = null, Vmess|Vless|Trojan|Shadowsocks|Socks|Http|Freedom|Dns|Blackhole $config = null,
-        array  $proxy_settings = null, string $send_through = null, array $mux = null
+        string $outbound_tag,
+        ?string $tag = null,
+        Vmess|Vless|Trojan|Shadowsocks|Socks|Http|Freedom|Dns|Blackhole|null $config = null,
+        ?array $proxy_settings = null,
+        ?string $send_through = null,
+        ?array $mux = null
     ): Result
     {
-        if (!isset($this->xray)) $this->xray = new Xray($this->request);
-        $result = $this->xray->get('outbounds');
-        if ($result->ok && $result->success) {
-            $xray_outbounds = $result->response(Statics::OUTPUT_ARRAY);
-            $updated = false;
-            foreach ($xray_outbounds as $key => $outbound):
-                if ($outbound['tag'] == $outbound_tag):
-                    $tag = (is_null($tag)) ? $outbound['tag'] : $tag;
-                    if (!is_null($config)) {
-                        $protocol = $config->protocol;
-                        $settings = $config->settings->settings();
-                        if (isset($config->stream_settings))
-                            $stream_settings = $config->stream_settings->stream_settings();
-                        else
-                            $stream_settings = [];
-                    } else {
-                        $protocol = $outbound['protocol'];
-                        $settings = $outbound['settings'];
-                        $stream_settings = $outbound['streamSettings'];
-                    }
-                    $outbound = [
-                        'sendThrough' => $send_through,
-                        'protocol' => $protocol,
-                        'settings' => $settings,
-                        'tag' => $tag,
-                        'streamSettings' => $stream_settings,
-                        'proxySettings' => $proxy_settings,
-                        'mux' => $mux
-                    ];
-                    if (!is_null($proxy_settings)) $outbound['proxySettings'] = $proxy_settings;
-                    if (!is_null($send_through)) $outbound['sendThrough'] = $send_through;
-                    if (!is_null($mux)) $outbound['mux'] = $mux;
-                    $xray_outbounds[$key] = $outbound;
-                    $updated = true;
-                    break;
-                endif;
-            endforeach;
-            if ($updated)
-                return $this->xray->update(['outbounds' => $xray_outbounds]);
-            else
-                return Result::make_fail(404, 'Outbound tag not found');
-        } else {
+        $xray = $this->xray();
+        $result = $xray->get('outbounds');
+        if (!$result->ok || !$result->success) {
             return $result;
         }
+
+        $outbounds = (array)$result->obj(Statics::OUTPUT_ARRAY);
+        foreach ($outbounds as $key => $outbound) {
+            if (($outbound['tag'] ?? null) !== $outbound_tag) {
+                continue;
+            }
+
+            if (!is_null($config)) {
+                $outbound['protocol'] = $config->protocol;
+                $outbound['settings'] = $config->settings->settings();
+                $outbound['streamSettings'] = isset($config->stream_settings)
+                    ? $config->stream_settings->stream_settings()
+                    : [];
+            }
+            if (!is_null($tag)) {
+                $outbound['tag'] = $tag;
+            }
+            if (!is_null($send_through)) {
+                $outbound['sendThrough'] = $send_through;
+            }
+            if (!is_null($proxy_settings)) {
+                $outbound['proxySettings'] = $proxy_settings;
+            }
+            if (!is_null($mux)) {
+                $outbound['mux'] = $mux;
+            }
+            $outbounds[$key] = $outbound;
+
+            return $xray->update(['outbounds' => $outbounds]);
+        }
+
+        return Result::make_fail(404, 'Outbound tag not found');
     }
 
     /**
-     * Delete an outbound
-     * @param string $outbound_tag
+     * Delete an outbound by tag.
+     *
+     * @param string $outbound_tag Outbound tag.
      * @return Result
      */
     public function delete(string $outbound_tag): Result
     {
-        if (!isset($this->xray)) $this->xray = new Xray($this->request);
-        $result = $this->xray->get('outbounds');
-        if ($result->ok && $result->success) {
-            $xray_outbounds = $result->response(Statics::OUTPUT_ARRAY);
-            $deleted = false;
-            foreach ($xray_outbounds as $key => $outbound):
-                if ($outbound['tag'] == $outbound_tag):
-                    unset($xray_outbounds[$key]);
-                    $deleted = true;
-                    break;
-                endif;
-            endforeach;
-            if ($deleted)
-                return $this->xray->update(['outbounds' => $xray_outbounds]);
-            else
-                return Result::make_fail(404, 'Outbound tag not found');
-        } else {
+        $xray = $this->xray();
+        $result = $xray->get('outbounds');
+        if (!$result->ok || !$result->success) {
             return $result;
         }
+
+        $outbounds = (array)$result->obj(Statics::OUTPUT_ARRAY);
+        foreach ($outbounds as $key => $outbound) {
+            if (($outbound['tag'] ?? null) === $outbound_tag) {
+                unset($outbounds[$key]);
+                return $xray->update(['outbounds' => array_values($outbounds)]);
+            }
+        }
+
+        return Result::make_fail(404, 'Outbound tag not found');
     }
 
     /**
-     * Read outbound
-     * @param array|string|object $inbound
-     * @return Http|Socks|Vless|false|Trojan|Shadowsocks|Vmess
+     * Rebuild a typed outbound configuration from an outbound payload.
+     *
+     * @param array|string|object $outbound Outbound payload.
+     * @return Http|Socks|Vless|Trojan|Shadowsocks|Vmess|Freedom|Blackhole|Dns|false
      */
-    public static function read(array|string|object $outbound): Http|Socks|Vless|false|Trojan|Shadowsocks|Vmess
+    public static function read(
+        array|string|object $outbound
+    ): Http|Socks|Vless|Trojan|Shadowsocks|Vmess|Freedom|Blackhole|Dns|false
     {
-        $outbound = json::to_object($outbound);
-        if (is_object($outbound)) {
-            switch ($outbound->protocol):
-                case 'vmess':
-                    $settings = $outbound->settings;
-                    $stream = $outbound->streamSettings;
-                    $config = new Vmess(json::_out($settings), json::_out($stream));
-                break;
-                case 'vless':
-                    $settings = $outbound->settings;
-                    $stream = $outbound->streamSettings;
-                    $config = new Vless(json::_out($settings), json::_out($stream));
-                break;
-                case 'trojan':
-                    $settings = $outbound->settings;
-                    $stream = $outbound->streamSettings;
-                    $config = new Trojan(json::_out($settings), json::_out($stream));
-                break;
-                case 'shadowsocks':
-                    $settings = $outbound->settings;
-                    $stream = $outbound->streamSettings;
-                    $config = new Shadowsocks(json::_out($settings), json::_out($stream));
-                break;
-                case 'socks':
-                    $settings = $outbound->settings;
-                    $config = new Socks(json::_out($settings));
-                break;
-                case 'http':
-                    $settings = $outbound->settings;
-                    $config = new Http(json::_out($settings));
-                break;
-            endswitch;
-            return $config ?? false;
-        } else {
+        $data = match (true) {
+            is_array($outbound) => $outbound,
+            is_object($outbound) => (array)$outbound,
+            default => (array)(json_decode($outbound, true) ?: []),
+        };
+        if ($data === []) {
             return false;
         }
+
+        $settings = is_string($data['settings'] ?? null) ? $data['settings'] : json_encode($data['settings'] ?? []);
+        $stream = is_string($data['streamSettings'] ?? null) ? $data['streamSettings'] : json_encode($data['streamSettings'] ?? []);
+
+        return match ((string)($data['protocol'] ?? '')) {
+            'vmess' => new Vmess($settings, $stream),
+            'vless' => new Vless($settings, $stream),
+            'trojan' => new Trojan($settings, $stream),
+            'shadowsocks' => new Shadowsocks($settings, $stream),
+            'socks' => new Socks($settings),
+            'http' => new Http($settings),
+            'freedom' => new Freedom($settings),
+            'blackhole' => new Blackhole($settings),
+            'dns' => new Dns($settings),
+            default => false,
+        };
     }
 
-
     /**
-     * Convert outbound to inbound
-     * @param Vmess|Vless|Trojan|Shadowsocks|Socks|Http $outbound_config
-     * @param string $listen
-     * @param int|null $port
-     * @return ib_Vmess|ib_Vless|ib_Trojan|ib_Shadowsocks|ib_Socks|ib_Http|false
+     * Convert a supported outbound configuration into an inbound configuration.
+     *
+     * @param Vmess|Vless|Trojan|Shadowsocks|Socks|Http $outbound_config Source outbound.
+     * @param string $listen Listen address for the inbound.
+     * @param int|null $port Listen port, defaults to the outbound port.
+     * @return \XUI\Inbounds\Protocols\Vmess\Vmess|\XUI\Inbounds\Protocols\Vless\Vless|\XUI\Inbounds\Protocols\Trojan\Trojan|\XUI\Inbounds\Protocols\Shadowsocks\Shadowsocks|\XUI\Inbounds\Protocols\Socks\Socks|\XUI\Inbounds\Protocols\Http\Http|false
      */
     public static function to_inbound(
-        Vmess|Vless|Trojan|Shadowsocks|Socks|Http $outbound_config, string $listen = '', int|null $port = null
-    ): ib_Vmess|ib_Vless|ib_Trojan|ib_Shadowsocks|ib_Socks|ib_Http|false
+        Vmess|Vless|Trojan|Shadowsocks|Socks|Http $outbound_config,
+        string $listen = '',
+        ?int $port = null
+    ): \XUI\Inbounds\Protocols\Vmess\Vmess|\XUI\Inbounds\Protocols\Vless\Vless|\XUI\Inbounds\Protocols\Trojan\Trojan|\XUI\Inbounds\Protocols\Shadowsocks\Shadowsocks|\XUI\Inbounds\Protocols\Socks\Socks|\XUI\Inbounds\Protocols\Http\Http|false
     {
-        $port = $port ?? $outbound_config->settings->port;
-        switch ($outbound_config->protocol):
+        $port ??= $outbound_config->settings->port;
+        $stream = isset($outbound_config->stream_settings)
+            ? self::stream_to_inbound($outbound_config->stream_settings)
+            : null;
+
+        switch ($outbound_config->protocol) {
             case 'vmess':
-                $settings = $outbound_config->settings;
-                $stream = $outbound_config->stream_settings;
-                $config = new ib_Vmess($listen, $port);
-                $config_settings = new \XUI\Inbounds\Protocols\Vmess\Settings();
-                $config_settings->add_client(true, $settings->users[0]['id']);
-            break;
+                $config = new \XUI\Inbounds\Protocols\Vmess\Vmess($listen, $port);
+                $settings = new \XUI\Inbounds\Protocols\Vmess\Settings();
+                $user = $outbound_config->settings->users[0] ?? null;
+                if ($user !== null) {
+                    $settings->add_client(true, (string)$user['id']);
+                }
+                break;
             case 'vless':
-                $settings = $outbound_config->settings;
-                $stream = $outbound_config->stream_settings;
-                $config = new ib_Vless($listen, $port);
-                $config_settings = new \XUI\Inbounds\Protocols\Vless\Settings();
-                $config_settings->add_client(true, $settings->users[0]['id']);
-            break;
+                $config = new \XUI\Inbounds\Protocols\Vless\Vless($listen, $port);
+                $settings = new \XUI\Inbounds\Protocols\Vless\Settings();
+                $user = $outbound_config->settings->users[0] ?? null;
+                if ($user !== null) {
+                    $settings->add_client(true, (string)$user['id'], flow: (string)($user['flow'] ?? ''));
+                }
+                break;
             case 'trojan':
-                $settings = $outbound_config->settings;
-                $stream = $outbound_config->stream_settings;
-                $config = new ib_Trojan($listen, $port);
-                $config_settings = new \XUI\Inbounds\Protocols\Trojan\Settings();
-                $config_settings->add_client(true, $settings->users[0]['email'], $settings->users[0]['password']);
-            break;
-            case 'shadowsocks':
-                $settings = $outbound_config->settings;
-                $stream = $outbound_config->stream_settings;
-                $config = new ib_Shadowsocks($listen, $port);
-                $config_settings = new \XUI\Inbounds\Protocols\Shadowsocks\Settings(
-                    [], $port, $settings->password, $settings->method, $settings->email
+                $config = new \XUI\Inbounds\Protocols\Trojan\Trojan($listen, $port);
+                $settings = new \XUI\Inbounds\Protocols\Trojan\Settings();
+                $settings->add_client(
+                    true,
+                    $outbound_config->settings->email,
+                    $outbound_config->settings->password
                 );
-                $config_settings->add_client(true, $settings->method, $settings->password, $settings->email);
-            break;
+                break;
+            case 'shadowsocks':
+                $config = new \XUI\Inbounds\Protocols\Shadowsocks\Shadowsocks($listen, $port);
+                $settings = new \XUI\Inbounds\Protocols\Shadowsocks\Settings(
+                    [],
+                    $outbound_config->settings->password,
+                    $outbound_config->settings->method
+                );
+                $settings->add_client(
+                    true,
+                    $outbound_config->settings->method,
+                    $outbound_config->settings->password,
+                    $outbound_config->settings->email
+                );
+                break;
             case 'socks':
-                $settings = $outbound_config->settings;
-                $config = new ib_Socks($listen, $port);
-                $config_settings = new \XUI\Inbounds\Protocols\Socks\Settings();
-                $config_settings->add_account($settings->users[0]['username'], $settings->users[0]['password']);
-            break;
+                $config = new \XUI\Inbounds\Protocols\Socks\Socks($listen, $port);
+                $settings = new \XUI\Inbounds\Protocols\Socks\Settings();
+                $user = $outbound_config->settings->users[0] ?? null;
+                if ($user !== null) {
+                    $settings->add_account((string)$user['username'], (string)$user['password']);
+                }
+                break;
             case 'http':
-                $settings = $outbound_config->settings;
-                $config = new ib_Http($listen, $port);
-                $config_settings = new \XUI\Inbounds\Protocols\Http\Settings();
-                $config_settings->add_account($settings->users[0]['username'], $settings->users[0]['password']);
-            break;
-        endswitch;
-        if (isset($config_settings))
-            $config->settings = $config_settings;
-        if (isset($stream)):
-            $config_stream = new ib_StreamSettings($stream->network, $stream->security);
-            switch ($stream->network):
-                case 'tcp':
-                    $accept_proxy_protocol = $stream->tcp_settings['acceptProxyProtocol'] ?? false;
-                    $header_type = $stream->tcp_settings['header']['type'];
-                    $header_request = ($header_type == 'http') ? [
-                        'version' => $stream->tcp_settings['header']['request']['version'],
-                        'method' => $stream->tcp_settings['header']['request']['method'],
-                        'path' => $stream->tcp_settings['header']['request']['path'],
-                    ] : [];
-                    $header_response = ($header_type == 'http') ? [
-                        'version' => $stream->tcp_settings['header']['request']['version'],
-                        'status' => 200,
-                        'reason' => 'OK',
-                    ] : [];
-                    $config_stream->tcp_settings($accept_proxy_protocol, $header_type, $header_request, $header_response);
+                $config = new \XUI\Inbounds\Protocols\Http\Http($listen, $port);
+                $settings = new \XUI\Inbounds\Protocols\Http\Settings();
+                $user = $outbound_config->settings->users[0] ?? null;
+                if ($user !== null) {
+                    $settings->add_account((string)$user['username'], (string)$user['password']);
+                }
                 break;
-                case 'ws':
-                    $accept_proxy_protocol = $stream->tcp_settings['acceptProxyProtocol'] ?? false;
-                    $config_stream->ws_settings($accept_proxy_protocol, $stream->ws_settings['path']);
+            default:
+                return false;
+        }
+
+        $config->settings = $settings;
+        if (!is_null($stream)) {
+            $config->stream_settings = $stream;
+        }
+        return $config;
+    }
+
+    /**
+     * Convert outbound stream settings into inbound stream settings.
+     *
+     * @param OutboundStreamSettings $stream Outbound stream settings.
+     * @return \XUI\Inbounds\StreamSettings
+     */
+    private static function stream_to_inbound(OutboundStreamSettings $stream): \XUI\Inbounds\StreamSettings
+    {
+        $in = new \XUI\Inbounds\StreamSettings($stream->network, $stream->security);
+
+        switch ($stream->network) {
+            case OutboundStreamSettings::NETWORK_TCP:
+                $header = $stream->tcp_settings['header'] ?? [];
+                $in->tcp_settings((bool)($stream->tcp_settings['acceptProxyProtocol'] ?? false), (string)($header['type'] ?? 'none'));
                 break;
-                case 'kcp':
-                    $config_stream->kcp_settings(
-                        $stream->kcp_settings['header']['type'],
-                        $stream->kcp_settings['seed'],
-                        $stream->kcp_settings['mtu'],
-                        $stream->kcp_settings['tti'],
-                        $stream->kcp_settings['uplinkCapacity'],
-                        $stream->kcp_settings['downLinkCapacity'],
-                        $stream->kcp_settings['congestion'],
-                        $stream->kcp_settings['readBufferSize'],
-                        $stream->kcp_settings['writeBufferSize'],
-                    );
+            case OutboundStreamSettings::NETWORK_WS:
+                $in->ws_settings(
+                    (bool)($stream->ws_settings['acceptProxyProtocol'] ?? false),
+                    (string)($stream->ws_settings['path'] ?? '/'),
+                    (string)($stream->ws_settings['host'] ?? ''),
+                    (array)($stream->ws_settings['headers'] ?? [])
+                );
                 break;
-                case 'http':
-                    $config_stream->http_settings(
-                        $stream->http_settings['method'],
-                        $stream->http_settings['path'],
-                        $stream->http_settings['host'],
-                        $stream->http_settings['read_idle_timeout'],
-                        $stream->http_settings['health_check_timeout']
-                    );
+            case OutboundStreamSettings::NETWORK_KCP:
+                $kcp = $stream->kcp_settings;
+                $in->kcp_settings(
+                    (string)($kcp['header']['type'] ?? 'none'),
+                    isset($kcp['seed']) ? (string)$kcp['seed'] : null,
+                    (int)($kcp['mtu'] ?? 1350),
+                    (int)($kcp['tti'] ?? 50),
+                    (int)($kcp['uplinkCapacity'] ?? 5),
+                    (int)($kcp['downlinkCapacity'] ?? 20),
+                    (bool)($kcp['congestion'] ?? false),
+                    (int)($kcp['readBufferSize'] ?? 2),
+                    (int)($kcp['writeBufferSize'] ?? 5)
+                );
                 break;
-                case 'domainsocket':
-                    $config_stream->ds_settings($stream->ds_settings['path'], $stream->ds_settings['abstract'], $stream->ds_settings['padding']);
+            case OutboundStreamSettings::NETWORK_HTTP:
+                $http = $stream->http_settings;
+                $in->http_settings(
+                    (string)($http['method'] ?? 'PUT'),
+                    (string)($http['path'] ?? '/'),
+                    (array)($http['host'] ?? []),
+                    isset($http['read_idle_timeout']) ? (int)$http['read_idle_timeout'] : null,
+                    (int)($http['health_check_timeout'] ?? 15)
+                );
                 break;
-                case 'quic':
-                    $config_stream->quic_settings($stream->quic_settings['security'], $stream->quic_settings['key'], $stream->quic_settings['header']['type']);
+            case OutboundStreamSettings::NETWORK_GRPC:
+                $grpc = $stream->grpc_settings;
+                $in->grpc_settings(
+                    isset($grpc['serviceName']) ? (string)$grpc['serviceName'] : null,
+                    (bool)($grpc['multiMode'] ?? false),
+                    (int)($grpc['idle_timeout'] ?? 60),
+                    (int)($grpc['health_check_timeout'] ?? 20),
+                    (bool)($grpc['permit_without_stream'] ?? false),
+                    (int)($grpc['initial_windows_size'] ?? 0)
+                );
                 break;
-                case 'grpc':
-                    $config_stream->grpc_settings(
-                        $stream->grpc_settings['serviceName'],
-                        $stream->grpc_settings['multiMode'],
-                        $stream->grpc_settings['idle_timeout'],
-                        $stream->grpc_settings['health_check_timeout'],
-                        $stream->grpc_settings['permit_without_stream'],
-                        $stream->grpc_settings['initial_windows_size']
-                    );
+            case OutboundStreamSettings::NETWORK_QUIC:
+                $quic = $stream->quic_settings;
+                $in->quic_settings(
+                    (string)($quic['security'] ?? 'none'),
+                    isset($quic['key']) ? (string)$quic['key'] : null,
+                    (string)($quic['header']['type'] ?? 'none')
+                );
                 break;
-            endswitch;
-            switch ($stream->security):
-                case 'none':
-                    $config_stream->security = 'none';
+            case OutboundStreamSettings::NETWORK_HTTPUPGRADE:
+                $upgrade = $stream->httpupgrade_settings;
+                $in->httpupgrade_settings(
+                    (bool)($upgrade['acceptProxyProtocol'] ?? false),
+                    (string)($upgrade['host'] ?? ''),
+                    (string)($upgrade['path'] ?? '/'),
+                    (array)($upgrade['headers'] ?? [])
+                );
                 break;
-            endswitch;
-            $config->stream_settings = $config_stream;
-        endif;
-        return $config ?? false;
+            case OutboundStreamSettings::NETWORK_XHTTP:
+                $xhttp = $stream->xhttp_settings;
+                $in->xhttp_settings(
+                    (string)($xhttp['path'] ?? '/'),
+                    (string)($xhttp['host'] ?? ''),
+                    (string)($xhttp['mode'] ?? 'auto'),
+                    (array)($xhttp['headers'] ?? []),
+                    (array)($xhttp['extra'] ?? [])
+                );
+                break;
+            case OutboundStreamSettings::NETWORK_DOMAINSOCKET:
+                $ds = $stream->ds_settings;
+                $in->ds_settings((string)($ds['path'] ?? '/'), (bool)($ds['abstract'] ?? false), (bool)($ds['padding'] ?? false));
+                break;
+        }
+
+        if ($stream->security === OutboundStreamSettings::SECURITY_TLS) {
+            $tls = $stream->tls_settings;
+            $in->tls_settings(
+                (string)($tls['serverName'] ?? ''),
+                (bool)($tls['allowInsecure'] ?? false),
+                (array)($tls['alpn'] ?? ['h2', 'http/1.1']),
+                fingerprint: (string)($tls['fingerprint'] ?? '')
+            );
+        }
+
+        if (!empty($stream->sockopt)) {
+            $sockopt = $stream->sockopt;
+            $in->sockopt(
+                (int)($sockopt['mark'] ?? 0),
+                (bool)($sockopt['tcpFastOpen'] ?? false),
+                (string)($sockopt['tproxy'] ?? 'off'),
+                (string)($sockopt['domainStrategy'] ?? 'AsIs'),
+                (string)($sockopt['dialerProxy'] ?? ''),
+                (bool)($sockopt['acceptProxyProtocol'] ?? false),
+                (int)($sockopt['tcpKeepAliveInterval'] ?? 0),
+                (string)($sockopt['tcpcongestion'] ?? ''),
+                (string)($sockopt['interface'] ?? ''),
+                (bool)($sockopt['tcpMptcp'] ?? false),
+                (bool)($sockopt['tcpNoDelay'] ?? false)
+            );
+        }
+
+        return $in;
+    }
+
+    /**
+     * Return the shared Xray helper, creating it on first use.
+     *
+     * @return Xray
+     */
+    private function xray(): Xray
+    {
+        return $this->xray ??= new Xray($this->request);
     }
 }

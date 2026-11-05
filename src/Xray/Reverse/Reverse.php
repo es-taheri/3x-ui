@@ -2,265 +2,259 @@
 
 namespace XUI\Xray\Reverse;
 
-use XUI\Handler\Request;
 use XUI\Handler\Result;
 use XUI\Helper\Statics;
 use XUI\Xray;
-/**
- * @method array|bool|null   bridges(array|null $value = null)          Get/Set the bridges.<br/>Don't set $value to get list of bridges.
- * @method array|bool|null   portals(array|null $value = null)          Get/Set the portals.<br/>Don't set $value to get list of portals.
- */
 
+/**
+ * Object-oriented view of the Xray `reverse` section.
+ *
+ * <h4>Removed from 3x-ui v2.9.4, kept for older panels.</h4>
+ *
+ * @method array bridges(array|null $value = null) Get/Set the bridge list.
+ * @method array portals(array|null $value = null) Get/Set the portal list.
+ */
 class Reverse
 {
+    /** Bridge definitions. */
     private array $bridges = [];
+
+    /** Portal definitions. */
     private array $portals = [];
 
-    public function __construct(private readonly Xray $xray)
+    /**
+     * @param Xray $xray Parent Xray helper.
+     */
+    public function __construct(
+        /** @var Xray Parent Xray helper. */
+        private readonly Xray $xray
+    )
     {
     }
 
     /**
-     * Load reverse configurations from xray config
-     * @return bool
+     * Magical fluent getters/setters.
+     *
+     * @param string $name Property name.
+     * @param array $arguments Empty to read, one value to write.
+     * @return mixed
      */
+    public function __call(string $name, array $arguments): mixed
+    {
+        if (!property_exists($this, $name)) {
+            return null;
+        }
+        if ($arguments === []) {
+            return $this->{$name};
+        }
+        $this->{$name} = $arguments[0];
+        return $this;
+    }
 
+    /**
+     * Load the reverse section from the Xray config.
+     *
+     * @return bool True when the config could be read.
+     */
     public function load(): bool
     {
-        $reverse = $this->xray->get('reverse', output: Statics::OUTPUT_ARRAY);
-        if (is_array($reverse)) {
-            if (isset($reverse['bridges'])) $this->bridges = $reverse['bridges'];
-            if (isset($reverse['portals'])) $this->portals = $reverse['portals'];
-            return true;
-        } else {
+        $reverse = $this->xray->get('reverse');
+        if (!$reverse->ok || !$reverse->success) {
             return false;
         }
+
+        $data = (array)$reverse->obj(Statics::OUTPUT_ARRAY);
+        if (isset($data['bridges'])) $this->bridges = (array)$data['bridges'];
+        if (isset($data['portals'])) $this->portals = (array)$data['portals'];
+        return true;
     }
 
     /**
-     *  Update reverse configuration based on current configs.
+     * Persist the reverse section into the Xray config.
+     *
      * @return Result
      */
     public function update(): Result
     {
         $reverse = [];
-        if (!empty($this->portals)) $reverse['portals'] = $this->portals;
-        if (!empty($this->bridges)) $reverse['bridges'] = $this->bridges;
+        if ($this->portals !== []) $reverse['portals'] = $this->portals;
+        if ($this->bridges !== []) $reverse['bridges'] = $this->bridges;
         return $this->xray->update(['reverse' => $reverse]);
     }
-    public function __call($name, $args)
-    {
-        return empty($args) ? ($this->$name ?? null) : !!($this->$name = $args[0]);
-    }
+
     /**
-     * Add bridge to reverse
-     * @param string $tag
-     * @param string $domain
-     * @param bool $apply Apply changes to reverse in xray config
+     * Append a bridge.
+     *
+     * @param string $tag Bridge tag.
+     * @param string $domain Bridge domain.
+     * @param bool $apply Persist immediately.
      * @return true|Result
      */
     public function add_bridge(string $tag, string $domain = 'reverse.xui', bool $apply = true): true|Result
     {
-        $this->bridges[] = [
-            'tag' => $tag,
-            'domain' => $domain
-        ];
-        if ($apply)
-            return $this->update();
-        else
-            return true;
+        $this->bridges[] = ['tag' => $tag, 'domain' => $domain];
+        return $apply ? $this->update() : true;
     }
 
     /**
-     * Get a bridge from reverse
-     * @param string $bridge_tag
+     * Find a bridge by tag.
+     *
+     * @param string $bridge_tag Bridge tag.
      * @return Result
      */
     public function get_bridge(string $bridge_tag): Result
     {
-        $return = Result::make_fail(404, 'reverse bridge not found');
-        foreach ($this->bridges as $bridge):
-            if ($bridge_tag == $bridge['tag']):
-                $return = Result::make_ok(Result::make_response(true, $bridge));
-                break;
-            endif;
-        endforeach;
-        return $return;
+        foreach ($this->bridges as $bridge) {
+            if (($bridge['tag'] ?? null) === $bridge_tag) {
+                return Result::make_ok(Result::make_response(true, $bridge));
+            }
+        }
+        return Result::make_fail(404, 'reverse bridge not found');
     }
 
     /**
-     * Update a bridge from reverse
-     * @param string $bridge_tag
-     * @param string|null $tag
-     * @param string|null $domain
-     * @param bool $apply Apply changes to reverse in xray config
+     * Replace a bridge.
+     *
+     * @param string $bridge_tag Existing bridge tag.
+     * @param string|null $tag New tag.
+     * @param string|null $domain New domain.
+     * @param bool $apply Persist immediately.
      * @return true|Result
      */
-    public function update_bridge(string $bridge_tag, string $tag = null, string $domain = null, bool $apply = true): true|Result
+    public function update_bridge(string $bridge_tag, ?string $tag = null, ?string $domain = null, bool $apply = true): true|Result
     {
-        $return = Result::make_fail(404, 'reverse bridge not found');
-        foreach ($this->bridges as $key => $bridge):
-            if ($bridge_tag == $bridge['tag']):
-                if (!is_null($tag)) $bridge['tag'] = $tag;
-                if (!is_null($tag)) $bridge['domain'] = $domain;
-                $this->bridges[$key] = $bridge;
-                if ($apply)
-                    $return = $this->update();
-                else
-                    $return = true;
-                break;
-            endif;
-        endforeach;
-        return $return;
+        foreach ($this->bridges as $key => $bridge) {
+            if (($bridge['tag'] ?? null) !== $bridge_tag) {
+                continue;
+            }
+            if (!is_null($tag)) $bridge['tag'] = $tag;
+            if (!is_null($domain)) $bridge['domain'] = $domain;
+            $this->bridges[$key] = $bridge;
+            return $apply ? $this->update() : true;
+        }
+        return Result::make_fail(404, 'reverse bridge not found');
     }
 
     /**
-     * Delete a bridge from reverse
-     * @param string $bridge_tag
-     * @param bool $apply Apply changes to reverse in xray config
+     * Delete a bridge.
+     *
+     * @param string $bridge_tag Bridge tag.
+     * @param bool $apply Persist immediately.
      * @return true|Result
      */
     public function delete_bridge(string $bridge_tag, bool $apply = true): true|Result
     {
-        $deleted = false;
-        foreach ($this->bridges as $key => $bridge):
-            if ($bridge_tag == $bridge['tag']):
+        foreach ($this->bridges as $key => $bridge) {
+            if (($bridge['tag'] ?? null) === $bridge_tag) {
                 unset($this->bridges[$key]);
-                $deleted = true;
-                break;
-            endif;
-        endforeach;
-        if ($deleted) {
-            if ($apply)
-                $return = $this->update();
-            else
-                $return = true;
-        } else {
-            $return = Result::make_fail(404, 'reverse bridge not found');
+                $this->bridges = array_values($this->bridges);
+                return $apply ? $this->update() : true;
+            }
         }
-        return $return;
+        return Result::make_fail(404, 'reverse bridge not found');
     }
 
     /**
-     * Check the bridge availability
-     * @param string $bridge_tag
+     * Check whether a bridge tag exists.
+     *
+     * @param string $bridge_tag Bridge tag.
      * @return bool
      */
     public function has_bridge(string $bridge_tag): bool
     {
-        $return = false;
-        foreach ($this->bridges as $key => $bridge):
-            if ($bridge_tag == $bridge['tag']):
-                $return = true;
-                break;
-            endif;
-        endforeach;
-        return $return;
+        foreach ($this->bridges as $bridge) {
+            if (($bridge['tag'] ?? null) === $bridge_tag) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
-     * Add portal to reverse
-     * @param string $tag
-     * @param string $domain
-     * @param bool $apply Apply changes to reverse in xray config
+     * Append a portal.
+     *
+     * @param string $tag Portal tag.
+     * @param string $domain Portal domain.
+     * @param bool $apply Persist immediately.
      * @return true|Result
      */
     public function add_portal(string $tag, string $domain = 'reverse.xui', bool $apply = true): true|Result
     {
-        $this->portals[] = [
-            'tag' => $tag,
-            'domain' => $domain
-        ];
-        if ($apply)
-            return $this->update();
-        else
-            return true;
+        $this->portals[] = ['tag' => $tag, 'domain' => $domain];
+        return $apply ? $this->update() : true;
     }
 
     /**
-     * Get a portal from reverse
-     * @param string $portal_tag
+     * Find a portal by tag.
+     *
+     * @param string $portal_tag Portal tag.
      * @return Result
      */
     public function get_portal(string $portal_tag): Result
     {
-        $return = Result::make_fail(404, 'reverse portal not found');
-        foreach ($this->portals as $portal):
-            if ($portal_tag == $portal['tag']):
-                $return = Result::make_ok(Result::make_response(true, $portal));
-                break;
-            endif;
-        endforeach;
-        return $return;
+        foreach ($this->portals as $portal) {
+            if (($portal['tag'] ?? null) === $portal_tag) {
+                return Result::make_ok(Result::make_response(true, $portal));
+            }
+        }
+        return Result::make_fail(404, 'reverse portal not found');
     }
 
     /**
-     * Update a portal from reverse
-     * @param string $portal_tag
-     * @param string|null $tag
-     * @param string|null $domain
-     * @param bool $apply Apply changes to reverse in xray config
+     * Replace a portal.
+     *
+     * @param string $portal_tag Existing portal tag.
+     * @param string|null $tag New tag.
+     * @param string|null $domain New domain.
+     * @param bool $apply Persist immediately.
      * @return true|Result
      */
-    public function update_portal(string $portal_tag, string $tag = null, string $domain = null, bool $apply = true): true|Result
+    public function update_portal(string $portal_tag, ?string $tag = null, ?string $domain = null, bool $apply = true): true|Result
     {
-        $return = Result::make_fail(404, 'reverse portal not found');
-        foreach ($this->portals as $key => $portal):
-            if ($portal_tag == $portal['tag']):
-                if (!is_null($tag)) $portal['tag'] = $tag;
-                if (!is_null($tag)) $portal['domain'] = $domain;
-                $this->portals[$key] = $portal;
-                if ($apply)
-                    $return = $this->update();
-                else
-                    $return = true;
-                break;
-            endif;
-        endforeach;
-        return $return;
+        foreach ($this->portals as $key => $portal) {
+            if (($portal['tag'] ?? null) !== $portal_tag) {
+                continue;
+            }
+            if (!is_null($tag)) $portal['tag'] = $tag;
+            if (!is_null($domain)) $portal['domain'] = $domain;
+            $this->portals[$key] = $portal;
+            return $apply ? $this->update() : true;
+        }
+        return Result::make_fail(404, 'reverse portal not found');
     }
 
     /**
-     * Delete a portal from reverse
-     * @param string $portal_tag
-     * @param bool $apply Apply changes to reverse in xray config
+     * Delete a portal.
+     *
+     * @param string $portal_tag Portal tag.
+     * @param bool $apply Persist immediately.
      * @return true|Result
      */
     public function delete_portal(string $portal_tag, bool $apply = true): true|Result
     {
-        $deleted = false;
-        foreach ($this->portals as $key => $portal):
-            if ($portal_tag == $portal['tag']):
+        foreach ($this->portals as $key => $portal) {
+            if (($portal['tag'] ?? null) === $portal_tag) {
                 unset($this->portals[$key]);
-                $deleted = true;
-                break;
-            endif;
-        endforeach;
-        if ($deleted) {
-            if ($apply)
-                $return = $this->update();
-            else
-                $return = true;
-        } else {
-            $return = Result::make_fail(404, 'reverse portal not found');
+                $this->portals = array_values($this->portals);
+                return $apply ? $this->update() : true;
+            }
         }
-        return $return;
+        return Result::make_fail(404, 'reverse portal not found');
     }
 
     /**
-     * Check the portal availability on reverse
-     * @param string $portal_tag
+     * Check whether a portal tag exists.
+     *
+     * @param string $portal_tag Portal tag.
      * @return bool
      */
     public function has_portal(string $portal_tag): bool
     {
-        $return = false;
-        foreach ($this->portals as $key => $portal):
-            if ($portal_tag == $portal['tag']):
-                $return = true;
-                break;
-            endif;
-        endforeach;
-        return $return;
+        foreach ($this->portals as $portal) {
+            if (($portal['tag'] ?? null) === $portal_tag) {
+                return true;
+            }
+        }
+        return false;
     }
 }

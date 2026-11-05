@@ -21,6 +21,7 @@
     }
   ],
   "require": {
+    "php": ">=8.2",
     "guzzlehttp/guzzle": "^7.11",
     "estaheri/json": "^v1.1.3"
   },
