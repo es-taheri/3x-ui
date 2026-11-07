@@ -133,7 +133,7 @@ use XUI\Xui;
 $request = new Request(Request::config(
     host: 'panel.example.com',
     port: 2053,
-    uri_path: 'ctrladmin',   // panel base path, '' or '/' when it is at the root
+    uri_path: 'xxxxx',   // panel base path, '' or '/' when it is at the root
     has_ssl: true,
 ));
 
@@ -181,7 +181,7 @@ This is the default when no token is supplied. The library stores the session co
 $request = new Request(Request::config(
     host: 'panel.example.com',
     port: 2053,
-    uri_path: 'ctrladmin',
+    uri_path: 'xxxxx',
     has_ssl: true,
     cookie_dir: sys_get_temp_dir() . '/xui-cookies', // optional
     timeout: 15,                                    // optional, seconds
@@ -199,7 +199,7 @@ required and no cookie file is written.
 $request = new Request(Request::config(
     host: 'panel.example.com',
     port: 2053,
-    uri_path: 'ctrladmin',
+    uri_path: 'xxxxx',
     has_ssl: true,
     api_token: getenv('XUI_API_TOKEN'),
 ));
@@ -464,7 +464,7 @@ use XUI\Xui;
 $xui = new Xui(new Request(Request::config(
     host: 'panel.example.com',
     port: 2053,
-    uri_path: 'ctrladmin',
+    uri_path: 'xxxxx',
     has_ssl: true,
 )));
 
@@ -870,7 +870,7 @@ $subscriptions->clash('/clash/', $sub_id);      // Clash/Mihomo YAML
 The panel pushes real-time events on `/ws` (session cookie required):
 
 ```php
-$xui->websocket_url(); // ws://panel.example.com:2053/ctrladmin/ws
+$xui->websocket_url(); // ws://panel.example.com:2053/xxxxx/ws
 ```
 
 Each message uses `{type, payload, time}` with `time` in Unix milliseconds.
