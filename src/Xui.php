@@ -78,8 +78,10 @@ class Xui
     /**
      * Log in with a username and password.
      *
-     * When a cookie session is already valid the call is a no-op. On success the
-     * CSRF token used by cookie sessions is refreshed automatically.
+     * When a cookie session is already valid the call is a no-op, but the CSRF
+     * token is still refreshed because unsafe requests need it. On a fresh
+     * login the token is fetched before the POST and again after it, since the
+     * panel rotates the session cookie on login.
      *
      * @param string $username Panel admin username.
      * @param string $password Panel admin password.
@@ -89,8 +91,13 @@ class Xui
     public function login(string $username, string $password, ?string $two_factor = null): true|Result
     {
         if ($this->is_login()) {
+            // Reused cookie sessions still need a CSRF token for unsafe requests.
+            $this->request->refresh_csrf_token();
             return true;
         }
+
+        // The token is bound to the session cookie, so establish both first.
+        $this->request->refresh_csrf_token();
 
         $body = [
             'username' => $username,
@@ -102,6 +109,7 @@ class Xui
 
         $result = $this->request->authentication(Request::post('login', $body));
         if ($result->ok && $result->success) {
+            // Fetch a token for the rotated session.
             $this->request->refresh_csrf_token();
         }
         return $result;
@@ -118,7 +126,7 @@ class Xui
     }
 
     /**
-     * Mint a fresh CSRF token for the current session.
+     * Fetch and remember a fresh CSRF token for the current session.
      *
      * Bearer-token callers do not need this.
      *
@@ -126,7 +134,7 @@ class Xui
      */
     public function csrf_token(): Result
     {
-        return $this->request->authentication(Request::get('csrf-token'));
+        return $this->request->fetch_csrf_token();
     }
 
     /**

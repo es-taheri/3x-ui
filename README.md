@@ -174,8 +174,12 @@ There are two supported modes. Both work for every endpoint under `/panel/api/*`
 ### Cookie session
 
 This is the default when no token is supplied. The library stores the session cookie in
-`src/.cookie/<host>_<port>.cookie`, reuses it across PHP processes, and fetches a fresh
-`X-CSRF-Token` after a successful login.
+`src/.cookie/<host>_<port>.cookie`, reuses it across PHP processes, and handles CSRF automatically:
+
+- the login POST is sent only after a `X-CSRF-Token` has been obtained for the session cookie;
+- the token is refreshed after login because the panel rotates the session;
+- on a reused session (new PHP process) the token is fetched lazily before the first unsafe
+  (`POST`/`PUT`/`PATCH`/`DELETE`) request.
 
 ```php
 $request = new Request(Request::config(
@@ -1010,8 +1014,9 @@ The cookie expired. Call `$xui->login()` again or switch to a Bearer token. Cook
 `src/.cookie` by default; make sure the directory is writable by the PHP process.
 
 **CSRF errors on cookie sessions**
-The token is refreshed automatically after login. If you log in outside the library, call
-`$xui->csrf_token()` once before making unsafe requests.
+The token is obtained before login, refreshed after login, and fetched lazily before the first unsafe request
+on a reused session. If you manage the session cookie yourself, call `$xui->csrf_token()` once to force a
+refresh.
 
 **TLS verification fails on a self-signed panel**
 Prefer pinning the certificate:

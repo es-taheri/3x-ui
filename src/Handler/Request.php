@@ -129,24 +129,37 @@ class Request
     }
 
     /**
-     * Fetch a fresh CSRF token for the current cookie session and remember it.
+     * Fetch a fresh CSRF token for the current cookie session, remember it and
+     * return the underlying result.
      *
-     * Bearer-token callers do not need a CSRF token; this method is a harmless
-     * no-op network call for them and is therefore skipped.
+     * The token is bound to the session cookie, so this also establishes the
+     * session before the first unsafe request. Bearer-token callers do not
+     * need CSRF and get a synthetic success result without a network call.
+     *
+     * @return Result
+     */
+    public function fetch_csrf_token(): Result
+    {
+        if (!is_null($this->api_token)) {
+            return Result::make_ok(Result::make_response(true, null, 'CSRF token is not required for Bearer authentication'));
+        }
+
+        $result = $this->request(self::get('csrf-token'));
+        $token = $result->obj();
+        if ($result->ok && $result->success && is_string($token) && $token !== '') {
+            $this->csrf_token = $token;
+        }
+        return $result;
+    }
+
+    /**
+     * Fetch a fresh CSRF token for the current cookie session and remember it.
      *
      * @return string|null The token, or null when it could not be obtained.
      */
     public function refresh_csrf_token(): ?string
     {
-        if (!is_null($this->api_token)) {
-            return null;
-        }
-
-        $result = $this->request(self::get('csrf-token'));
-        $token = $result->response();
-        if ($result->ok && is_object($token) && isset($token->obj) && is_string($token->obj)) {
-            $this->csrf_token = $token->obj;
-        }
+        $this->fetch_csrf_token();
         return $this->csrf_token;
     }
 
@@ -382,6 +395,7 @@ class Request
      */
     private function request(array $request): Result
     {
+        $this->ensure_csrf($request);
         $start = microtime(true);
         $options = $this->options($request);
         try {
@@ -404,6 +418,10 @@ class Request
      */
     private function multi_request(array $requests): array
     {
+        foreach ($requests as $request) {
+            $this->ensure_csrf($request);
+        }
+
         $promises = [];
         foreach ($requests as $request) {
             $start = microtime(true);
@@ -420,6 +438,34 @@ class Request
             static fn(array $item) => $item['value'] ?? null,
             $settled
         ));
+    }
+
+    /**
+     * Lazily obtain the CSRF token before the first unsafe cookie-session request.
+     *
+     * A fresh PHP process that reuses a persisted session cookie starts without
+     * a CSRF token, so every unsafe request would be rejected with `403` until
+     * one is fetched. Fetching it here keeps the public API unchanged.
+     *
+     * @param array $request Prepared request about to be sent.
+     * @return void
+     */
+    private function ensure_csrf(array $request): void
+    {
+        if (!is_null($this->api_token) || !is_null($this->csrf_token)) {
+            return;
+        }
+
+        $method = strtoupper((string)($request['method'] ?? self::METHOD_GET));
+        if (!in_array($method, [self::METHOD_POST, 'PUT', 'PATCH', self::METHOD_DELETE], true)) {
+            return;
+        }
+
+        if (ltrim((string)($request['route'] ?? ''), '/') === 'csrf-token') {
+            return;
+        }
+
+        $this->fetch_csrf_token();
     }
 
     /**
